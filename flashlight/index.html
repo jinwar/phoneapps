@@ -32,11 +32,6 @@
     transition: background-color 0.15s ease;
   }
 
-  #light.off {
-    background: #000000 !important;
-    filter: none !important;
-  }
-
   #panel {
     position: fixed;
     left: 0;
@@ -133,36 +128,10 @@
   #colorPicker::-webkit-color-swatch { border: none; border-radius: 50%; }
   #colorPicker::-moz-color-swatch { border: none; border-radius: 50%; }
 
-  #controlsRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  #powerBtn {
-    flex: 0 0 auto;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255,255,255,0.15);
-    color: #fff;
-    font-size: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #powerBtn.on {
-    background: #ffb020;
-    color: #1a1200;
-  }
-
   #hint {
-    flex: 1;
     color: rgba(255,255,255,0.6);
     font-size: 12px;
-    text-align: right;
+    text-align: center;
   }
 
   #tapCatcher {
@@ -192,7 +161,7 @@
 </head>
 <body>
 
-<div id="light" class="off"></div>
+<div id="light"></div>
 <div id="tapCatcher"></div>
 
 <button id="reopenTab" aria-label="Show controls">⚙</button>
@@ -214,42 +183,49 @@
     <input type="range" id="brightness" min="10" max="100" value="100">
   </div>
 
-  <div id="controlsRow">
-    <button id="powerBtn">⏻</button>
-    <div id="hint">Tap screen to hide controls</div>
-  </div>
+  <div id="hint">Tap screen to hide controls</div>
 </div>
 
 <script>
 (function () {
   var light = document.getElementById('light');
   var panel = document.getElementById('panel');
-  var powerBtn = document.getElementById('powerBtn');
   var brightness = document.getElementById('brightness');
   var colorPicker = document.getElementById('colorPicker');
   var swatches = document.querySelectorAll('.swatch');
   var tapCatcher = document.getElementById('tapCatcher');
   var reopenTab = document.getElementById('reopenTab');
 
-  var state = {
-    on: false,
-    color: '#ffffff',
-    brightness: 100
-  };
+  var STORAGE_KEY = 'flashlight-settings';
+
+  function loadSaved() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        if (saved && typeof saved.color === 'string' && typeof saved.brightness === 'number') {
+          return saved;
+        }
+      }
+    } catch (e) { /* ignore corrupt/blocked storage */ }
+    return { color: '#ffffff', brightness: 100 };
+  }
+
+  var state = loadSaved();
 
   var wakeLock = null;
   var hideTimer = null;
+  var fullscreenTried = false;
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* ignore blocked storage */ }
+  }
 
   function apply() {
     light.style.backgroundColor = state.color;
     light.style.filter = 'brightness(' + (state.brightness / 100) + ')';
-    if (state.on) {
-      light.classList.remove('off');
-      powerBtn.classList.add('on');
-    } else {
-      light.classList.add('off');
-      powerBtn.classList.remove('on');
-    }
   }
 
   function setColor(hex) {
@@ -259,6 +235,7 @@
       s.classList.toggle('active', s.getAttribute('data-color') === hex);
     });
     apply();
+    save();
   }
 
   async function requestWakeLock() {
@@ -270,44 +247,24 @@
     } catch (e) { /* ignore, not supported or denied */ }
   }
 
-  function releaseWakeLock() {
-    if (wakeLock) {
-      wakeLock.release().catch(function () {});
-      wakeLock = null;
-    }
-  }
-
-  function turnOn() {
-    state.on = true;
-    apply();
-    requestWakeLock();
+  function tryFullscreen() {
+    if (fullscreenTried) return;
+    fullscreenTried = true;
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(function () {});
     }
-    scheduleHide();
-  }
-
-  function turnOff() {
-    state.on = false;
-    apply();
-    releaseWakeLock();
-    showPanel();
-  }
-
-  function toggle() {
-    if (state.on) { turnOff(); } else { turnOn(); }
   }
 
   function showPanel() {
     panel.classList.remove('hidden');
     reopenTab.classList.remove('show');
     clearTimeout(hideTimer);
-    if (state.on) scheduleHide();
+    scheduleHide();
   }
 
   function hidePanel() {
     panel.classList.add('hidden');
-    if (state.on) reopenTab.classList.add('show');
+    reopenTab.classList.add('show');
   }
 
   function scheduleHide() {
@@ -315,14 +272,10 @@
     hideTimer = setTimeout(hidePanel, 3500);
   }
 
-  powerBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    toggle();
-  });
-
   brightness.addEventListener('input', function () {
     state.brightness = Number(brightness.value);
     apply();
+    save();
     scheduleHide();
   });
 
@@ -343,9 +296,10 @@
   panel.addEventListener('pointerdown', function (e) { e.stopPropagation(); scheduleHide(); });
 
   tapCatcher.addEventListener('click', function () {
+    tryFullscreen();
     if (panel.classList.contains('hidden')) {
       showPanel();
-    } else if (state.on) {
+    } else {
       hidePanel();
     }
   });
@@ -356,12 +310,15 @@
   });
 
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && state.on) {
+    if (document.visibilityState === 'visible') {
       requestWakeLock();
     }
   });
 
-  apply();
+  brightness.value = state.brightness;
+  setColor(state.color);
+  requestWakeLock();
+  scheduleHide();
 })();
 </script>
 </body>
