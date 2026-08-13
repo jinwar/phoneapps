@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flashlight</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<style>
+  :root {
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    user-select: none;
+  }
+
+  #light {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    filter: brightness(1);
+    transition: background-color 0.15s ease;
+  }
+
+  #light.off {
+    background: #000000 !important;
+    filter: none !important;
+  }
+
+  #panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.55) 70%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    z-index: 10;
+  }
+
+  #panel.hidden {
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .label {
+    color: rgba(255,255,255,0.85);
+    font-size: 13px;
+    min-width: 68px;
+    letter-spacing: 0.03em;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.25);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    cursor: pointer;
+  }
+
+  #swatches {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .swatch {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.15);
+  }
+  .swatch.active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
+  }
+
+  #colorPicker {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 34px;
+    height: 34px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 50%;
+    padding: 0;
+    background: none;
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+  #colorPicker::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  #colorPicker::-webkit-color-swatch { border: none; border-radius: 50%; }
+  #colorPicker::-moz-color-swatch { border: none; border-radius: 50%; }
+
+  #controlsRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  #powerBtn {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #powerBtn.on {
+    background: #ffb020;
+    color: #1a1200;
+  }
+
+  #hint {
+    flex: 1;
+    color: rgba(255,255,255,0.6);
+    font-size: 12px;
+    text-align: right;
+  }
+
+  #tapCatcher {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+  }
+
+  #reopenTab {
+    position: fixed;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 12;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 18px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  #reopenTab.show { display: flex; }
+</style>
+</head>
+<body>
+
+<div id="light" class="off"></div>
+<div id="tapCatcher"></div>
+
+<button id="reopenTab" aria-label="Show controls">⚙</button>
+
+<div id="panel">
+  <div id="swatches">
+    <div class="swatch active" data-color="#ffffff" style="background:#ffffff"></div>
+    <div class="swatch" data-color="#fff2d6" style="background:#fff2d6"></div>
+    <div class="swatch" data-color="#ff3b30" style="background:#ff3b30"></div>
+    <div class="swatch" data-color="#34c759" style="background:#34c759"></div>
+    <div class="swatch" data-color="#0a84ff" style="background:#0a84ff"></div>
+    <div class="swatch" data-color="#bf5af2" style="background:#bf5af2"></div>
+    <div class="swatch" data-color="#ff2d92" style="background:#ff2d92"></div>
+    <input type="color" id="colorPicker" value="#ffffff" title="Custom color">
+  </div>
+
+  <div class="row">
+    <span class="label">Brightness</span>
+    <input type="range" id="brightness" min="10" max="100" value="100">
+  </div>
+
+  <div id="controlsRow">
+    <button id="powerBtn">⏻</button>
+    <div id="hint">Tap screen to hide controls</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var light = document.getElementById('light');
+  var panel = document.getElementById('panel');
+  var powerBtn = document.getElementById('powerBtn');
+  var brightness = document.getElementById('brightness');
+  var colorPicker = document.getElementById('colorPicker');
+  var swatches = document.querySelectorAll('.swatch');
+  var tapCatcher = document.getElementById('tapCatcher');
+  var reopenTab = document.getElementById('reopenTab');
+
+  var state = {
+    on: false,
+    color: '#ffffff',
+    brightness: 100
+  };
+
+  var wakeLock = null;
+  var hideTimer = null;
+
+  function apply() {
+    light.style.backgroundColor = state.color;
+    light.style.filter = 'brightness(' + (state.brightness / 100) + ')';
+    if (state.on) {
+      light.classList.remove('off');
+      powerBtn.classList.add('on');
+    } else {
+      light.classList.add('off');
+      powerBtn.classList.remove('on');
+    }
+  }
+
+  function setColor(hex) {
+    state.color = hex;
+    colorPicker.value = hex;
+    swatches.forEach(function (s) {
+      s.classList.toggle('active', s.getAttribute('data-color') === hex);
+    });
+    apply();
+  }
+
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', function () {});
+      }
+    } catch (e) { /* ignore, not supported or denied */ }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release().catch(function () {});
+      wakeLock = null;
+    }
+  }
+
+  function turnOn() {
+    state.on = true;
+    apply();
+    requestWakeLock();
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(function () {});
+    }
+    scheduleHide();
+  }
+
+  function turnOff() {
+    state.on = false;
+    apply();
+    releaseWakeLock();
+    showPanel();
+  }
+
+  function toggle() {
+    if (state.on) { turnOff(); } else { turnOn(); }
+  }
+
+  function showPanel() {
+    panel.classList.remove('hidden');
+    reopenTab.classList.remove('show');
+    clearTimeout(hideTimer);
+    if (state.on) scheduleHide();
+  }
+
+  function hidePanel() {
+    panel.classList.add('hidden');
+    if (state.on) reopenTab.classList.add('show');
+  }
+
+  function scheduleHide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hidePanel, 3500);
+  }
+
+  powerBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggle();
+  });
+
+  brightness.addEventListener('input', function () {
+    state.brightness = Number(brightness.value);
+    apply();
+    scheduleHide();
+  });
+
+  colorPicker.addEventListener('input', function () {
+    setColor(colorPicker.value);
+    scheduleHide();
+  });
+
+  swatches.forEach(function (s) {
+    s.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setColor(s.getAttribute('data-color'));
+      scheduleHide();
+    });
+  });
+
+  panel.addEventListener('click', function (e) { e.stopPropagation(); });
+  panel.addEventListener('pointerdown', function (e) { e.stopPropagation(); scheduleHide(); });
+
+  tapCatcher.addEventListener('click', function () {
+    if (panel.classList.contains('hidden')) {
+      showPanel();
+    } else if (state.on) {
+      hidePanel();
+    }
+  });
+
+  reopenTab.addEventListener('click', function (e) {
+    e.stopPropagation();
+    showPanel();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && state.on) {
+      requestWakeLock();
+    }
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>
