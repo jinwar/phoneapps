@@ -95,14 +95,16 @@
 
   #swatches {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    height: 56px;
+    padding: 0 4px;
   }
   .swatch {
     flex: 0 0 auto;
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     border: 2px solid rgba(255,255,255,0.4);
     box-shadow: inset 0 0 0 2px rgba(0,0,0,0.15);
@@ -111,22 +113,6 @@
     border-color: #fff;
     box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
   }
-
-  #colorPicker {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 34px;
-    height: 34px;
-    border: 2px solid rgba(255,255,255,0.4);
-    border-radius: 50%;
-    padding: 0;
-    background: none;
-    overflow: hidden;
-    flex: 0 0 auto;
-  }
-  #colorPicker::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
-  #colorPicker::-webkit-color-swatch { border: none; border-radius: 50%; }
-  #colorPicker::-moz-color-swatch { border: none; border-radius: 50%; }
 
   #hint {
     color: rgba(255,255,255,0.6);
@@ -169,13 +155,11 @@
 <div id="panel">
   <div id="swatches">
     <div class="swatch active" data-color="#ffffff" style="background:#ffffff"></div>
-    <div class="swatch" data-color="#fff2d6" style="background:#fff2d6"></div>
     <div class="swatch" data-color="#ff3b30" style="background:#ff3b30"></div>
     <div class="swatch" data-color="#34c759" style="background:#34c759"></div>
     <div class="swatch" data-color="#0a84ff" style="background:#0a84ff"></div>
+    <div class="swatch" data-color="#ffd60a" style="background:#ffd60a"></div>
     <div class="swatch" data-color="#bf5af2" style="background:#bf5af2"></div>
-    <div class="swatch" data-color="#ff2d92" style="background:#ff2d92"></div>
-    <input type="color" id="colorPicker" value="#ffffff" title="Custom color">
   </div>
 
   <div class="row">
@@ -191,7 +175,6 @@
   var light = document.getElementById('light');
   var panel = document.getElementById('panel');
   var brightness = document.getElementById('brightness');
-  var colorPicker = document.getElementById('colorPicker');
   var swatches = document.querySelectorAll('.swatch');
   var tapCatcher = document.getElementById('tapCatcher');
   var reopenTab = document.getElementById('reopenTab');
@@ -230,7 +213,6 @@
 
   function setColor(hex) {
     state.color = hex;
-    colorPicker.value = hex;
     swatches.forEach(function (s) {
       s.classList.toggle('active', s.getAttribute('data-color') === hex);
     });
@@ -276,11 +258,6 @@
     state.brightness = Number(brightness.value);
     apply();
     save();
-    scheduleHide();
-  });
-
-  colorPicker.addEventListener('input', function () {
-    setColor(colorPicker.value);
     scheduleHide();
   });
 
