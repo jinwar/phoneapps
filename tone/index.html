@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10141c">
+  <meta name="description" content="Generate a single sine-wave tone from 1 to 30,000 Hz with frequency and volume sliders.">
+  <title>Tone Generator · Phone Apps</title>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="stylesheet" href="../styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="tone">
+    <a class="back" href="../">&larr; All apps</a>
+    <header class="title-row">
+      <img class="app-icon" src="icons/icon.svg" alt="" width="68" height="68">
+      <div><h1>Tone Generator</h1><p class="muted">One frequency. Pure sine wave.</p></div>
+    </header>
+    <section class="controls" aria-label="Tone controls">
+      <div class="readout"><strong id="frequency-display">440</strong> <span>Hz</span></div>
+      <svg class="wave" viewBox="0 0 400 60" aria-hidden="true"><path d="M0 30 Q25 -15 50 30 T100 30 T150 30 T200 30 T250 30 T300 30 T350 30 T400 30" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+      <div class="label-row">
+        <label for="frequency">Frequency</label>
+        <input id="exact-frequency" aria-label="Exact frequency in Hz" type="number" inputmode="numeric" min="1" max="30000" step="1" value="440">
+      </div>
+      <input id="frequency" type="range" min="0" max="10000" step="1" value="5904" aria-describedby="frequency-help">
+      <div class="scale"><span>1 Hz</span><span>30,000 Hz</span></div>
+      <p id="frequency-help" class="note">Logarithmic slider for finer control at low frequencies. Enter an exact value above.</p>
+      <div class="label-row"><label for="volume">Volume</label><output id="volume-display" for="volume">10%</output></div>
+      <input id="volume" type="range" min="0" max="100" step="1" value="10">
+      <div class="scale"><span>Silent</span><span>100%</span></div>
+      <button id="play" type="button" aria-pressed="false">Play tone</button>
+      <p id="status" class="status" role="status">Ready to play</p>
+    </section>
+    <p class="note">Start at low volume. Your phone’s volume buttons also affect loudness. Very low and high frequencies may be inaudible; phone speakers cannot reproduce the entire range. A 30,000 Hz setting does not guarantee 30,000 Hz speaker output.</p>
+    <p class="note" id="audio-info">Playback stops when you leave this app or turn off the screen.</p>
+    <noscript><p>This app needs JavaScript to generate audio.</p></noscript>
+  </main>
+</body>
+</html>
