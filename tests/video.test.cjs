@@ -16,6 +16,10 @@ test('paused video has no center play overlay', () => {
   assert.doesNotMatch(html, /id="centerPlay"/);
   assert.doesNotMatch(js, /centerPlay/);
 });
+test('viewer assets are cache-versioned so HTML and JavaScript stay compatible', () => {
+  assert.match(html, /src="app\.js\?v=\d+"/);
+  assert.match(html, /href="styles\.css\?v=\d+"/);
+});
 test('video remains local and stepping uses the selected frame rate', () => {
   assert.match(js, /URL\.createObjectURL/);
   assert.match(js, /1 \/ fps\(\)/);
