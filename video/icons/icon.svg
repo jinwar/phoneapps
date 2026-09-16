@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 68" role="img" aria-label="Video frame viewer">
+  <rect width="68" height="68" rx="18" fill="#91e4d0"/>
+  <rect x="13" y="17" width="42" height="34" rx="5" fill="#101c22"/>
+  <path d="M20 13v8M29 13v8M39 13v8M48 13v8M20 47v8M29 47v8M39 47v8M48 47v8" stroke="#101c22" stroke-width="3"/>
+  <path d="m30 27 12 7-12 7z" fill="#91e4d0"/>
+</svg>

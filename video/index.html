@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10141c">
+  <meta name="description" content="Open a local MP4 video and inspect it frame by frame.">
+  <title>Frame Viewer</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="viewer">
+    <a class="back" href="../">&larr;&nbsp; All apps</a>
+    <div class="title-row">
+      <img class="app-icon" src="icons/icon.svg" alt="" width="56" height="56">
+      <div><h1>Frame Viewer</h1><p class="muted">Your video stays on this device.</p></div>
+    </div>
+    <section id="picker" class="picker" aria-labelledby="picker-title">
+      <h2 id="picker-title">Choose an MP4 video</h2>
+      <p>Nothing is uploaded. The file opens locally in your browser.</p>
+      <label class="file-button" for="file">Choose video</label>
+      <input id="file" type="file" accept="video/mp4,.mp4">
+    </section>
+    <section id="workspace" hidden>
+      <div class="video-shell">
+        <video id="video" playsinline preload="metadata"></video>
+        <button id="centerPlay" class="center-play" aria-label="Play video">▶</button>
+      </div>
+      <div class="readouts" aria-live="polite">
+        <span><small>FRAME</small><strong id="frameNumber">0</strong></span>
+        <span><small>TIME</small><strong id="timeReadout">00:00.000</strong></span>
+        <span><small>DURATION</small><strong id="durationReadout">00:00.000</strong></span>
+      </div>
+      <label class="sr-only" for="timeline">Video position</label>
+      <input id="timeline" class="timeline" type="range" min="0" max="1000" value="0" step="1">
+      <div class="transport" aria-label="Video controls">
+        <button id="backTen" class="secondary" aria-label="Back 10 frames">−10</button>
+        <button id="previous" class="step" aria-label="Previous frame">◀<span>Frame</span></button>
+        <button id="play" class="primary" aria-label="Play video">▶</button>
+        <button id="next" class="step" aria-label="Next frame"><span>Frame</span>▶</button>
+        <button id="forwardTen" class="secondary" aria-label="Forward 10 frames">+10</button>
+      </div>
+      <div class="settings">
+        <label>Frame rate <input id="fps" type="number" min="1" max="240" step="0.001" value="30" inputmode="decimal"> fps</label>
+        <label>Speed <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+        <button id="mute" class="text-button" aria-pressed="false">Sound on</button>
+        <button id="fullscreen" class="text-button">Fullscreen</button>
+      </div>
+      <div class="file-row">
+        <div><strong id="fileName"></strong><span id="videoDetails"></span></div>
+        <label class="replace" for="file">Choose another</label>
+      </div>
+      <p id="status" class="note">Set the frame rate to match your video for accurate stepping.</p>
+      <details><summary>Keyboard controls</summary><p class="note"><kbd>←</kbd>/<kbd>→</kbd> one frame · <kbd>Shift</kbd> + arrow ten frames · <kbd>Space</kbd> play/pause · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen</p></details>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
