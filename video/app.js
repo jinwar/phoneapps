@@ -56,7 +56,6 @@
     shell.classList.toggle('playing', playing);
     $('play').textContent = playing ? '❚❚' : '▶';
     $('play').setAttribute('aria-label', playing ? 'Pause video' : 'Play video');
-    $('centerPlay').setAttribute('aria-label', playing ? 'Pause video' : 'Play video');
     if (playing) watchFrames();
   }
 
@@ -84,7 +83,6 @@
   video.addEventListener('pause', updatePlayState);
   video.addEventListener('ended', updatePlayState);
   video.addEventListener('error', () => { $('status').textContent = 'This video could not be opened. Try an MP4 encoded with H.264 video and AAC audio.'; });
-  $('centerPlay').addEventListener('click', togglePlay);
   $('play').addEventListener('click', togglePlay);
   $('previous').addEventListener('click', () => step(-1));
   $('next').addEventListener('click', () => step(1));

@@ -6,8 +6,6 @@
 .file-button, .replace { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 22px; border-radius: 14px; color: #101c22; background: #91e4d0; font-weight: 750; cursor: pointer; }
 .video-shell { position: relative; overflow: hidden; border-radius: 18px; background: #000; aspect-ratio: 16 / 9; display: grid; place-items: center; }
 video { width: 100%; height: 100%; object-fit: contain; }
-.center-play { position: absolute; width: 64px; height: 64px; border: 0; border-radius: 50%; background: #10141ccc; color: white; font-size: 1.5rem; }
-.video-shell.playing .center-play { opacity: 0; pointer-events: none; }
 .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 16px 0 6px; }
 .readouts span { min-width: 0; }
 .readouts small { display: block; color: #91e4d0; font-size: .65rem; letter-spacing: .12em; }

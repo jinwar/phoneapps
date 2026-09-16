@@ -12,6 +12,10 @@ test('picker accepts MP4 and provides touch controls', () => {
   assert.match(html, /accept="video\/mp4,.mp4"/);
   for (const id of ['previous', 'next', 'backTen', 'forwardTen', 'timeline', 'fps']) assert.match(html, new RegExp(`id="${id}"`));
 });
+test('paused video has no center play overlay', () => {
+  assert.doesNotMatch(html, /id="centerPlay"/);
+  assert.doesNotMatch(js, /centerPlay/);
+});
 test('video remains local and stepping uses the selected frame rate', () => {
   assert.match(js, /URL\.createObjectURL/);
   assert.match(js, /1 \/ fps\(\)/);
