@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10141c">
+<meta name="description" content="Connect a Bluetooth MIDI or USB-C piano keyboard and see the notes you play.">
+<title>MIDI Piano · Phone Apps</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="styles.css?v=1">
+<script src="midi.js?v=1" defer></script>
+<script src="app.js?v=1" defer></script>
+</head>
+<body><main class="piano">
+<a class="back" href="../">← All apps</a>
+<header class="title-row"><img class="app-icon" src="icon.svg" alt="" width="68" height="68"><div><p class="eyebrow">Play • See • Explore</p><h1>MIDI Piano</h1></div></header>
+<p class="intro">Connect your keyboard. See every note you play.</p>
+<section class="controls" aria-labelledby="connect-title">
+<h2 id="connect-title">Connect a keyboard</h2>
+<div class="connection-buttons"><button id="bluetooth">Connect Bluetooth</button><button id="usb">Connect USB-C / MIDI</button></div>
+<label class="check"><input type="checkbox" id="all-devices"> Show all Bluetooth devices if my keyboard is missing</label>
+<p class="note" id="compatibility"></p>
+<div id="usb-picker" hidden><label for="inputs">MIDI input</label><select id="inputs"><option value="">Choose a keyboard</option></select></div>
+<div class="connection-state"><span id="connection" role="status">No keyboard connected</span><button id="disconnect" disabled>Disconnect</button></div>
+<p id="message" class="note" role="status">Use Chrome on your Samsung phone and allow device access when asked.</p>
+</section>
+<section class="controls performance" aria-labelledby="notes-title">
+<div class="section-title"><h2 id="notes-title">Your notes</h2><button id="clear">Clear notes</button></div>
+<div id="notes">—</div><p id="details" class="note">Play a note on your connected keyboard.</p>
+<div class="indicators"><span id="pedal">Sustain off</span><span id="count">0 notes held</span></div>
+<div class="keyboard-window" tabindex="0" role="region" aria-label="Piano keyboard, A0 to C8. Scroll horizontally to see all keys."><div id="keyboard" aria-hidden="true"></div></div>
+<p class="note">88-key display · swipe sideways · middle C is C4. Notes outside this range still appear above.</p>
+</section>
+<details class="help"><summary>Connection help</summary>
+<p><strong>Bluetooth:</strong> Enable Bluetooth and the piano’s Bluetooth MIDI mode. Tap Connect Bluetooth and choose the keyboard. If it is missing, try “Show all Bluetooth devices.” Close other music apps that may already be connected. Some Android versions also require location services for Bluetooth discovery.</p>
+<p><strong>USB-C:</strong> Use a data-capable USB cable or USB-C OTG adapter. Connect to the piano’s USB-to-host port, then tap Connect USB-C / MIDI and allow access. Choose your keyboard from the list. Use external keyboard power or a powered hub if your phone cannot supply enough power.</p>
+<p>The keyboard must support standard BLE-MIDI or class-compliant USB MIDI. Bluetooth audio-only devices do not send notes. USB device names come from Android and may not identify the connection type.</p>
+<p>This app displays incoming MIDI; it does not generate sound. Use your piano’s own speakers. Notes stay on this device and are not recorded or uploaded. Only one connection is active at a time.</p>
+</details>
+<noscript><p>Enable JavaScript to connect your keyboard.</p></noscript>
+</main></body></html>

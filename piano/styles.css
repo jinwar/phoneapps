@@ -1,0 +1,28 @@
+.piano { max-width: 800px; }
+h2 { font-size: 1.1rem; margin: 0 0 16px; }
+.controls { margin: 20px 0; padding: 22px; }
+.connection-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+button, select { padding: 12px 14px; border: 1px solid #516675; color: #f1f5fb; background: #263844; font: inherit; }
+#bluetooth { background: #91e4d0; color: #101c22; font-weight: 700; }
+button:disabled { opacity: .45; cursor: default; }
+.check { display: flex; gap: 10px; align-items: center; margin-top: 18px; font-size: .85rem; font-weight: 400; line-height: 1.5; }
+.check input { min-width: 20px; height: 20px; accent-color: #91e4d0; }
+.connection-state, .section-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#connection { overflow-wrap: anywhere; font-size: .9rem; }
+#disconnect, #clear { font-size: .8rem; padding: 8px 12px; }
+#usb-picker { margin: 16px 0; }
+select { display: block; width: 100%; border-radius: 12px; margin-top: 8px; }
+#notes { font-size: clamp(2rem, 8vw, 3.6rem); color: #91e4d0; font-weight: 750; letter-spacing: -.035em; min-height: 80px; padding-top: 16px; overflow-wrap: anywhere; }
+.indicators { display: flex; gap: 12px; flex-wrap: wrap; font-size: .8rem; color: #aebbc9; margin: 18px 0; }
+.indicators span { border: 1px solid #43515e; border-radius: 20px; padding: 6px 12px; }
+.keyboard-window { max-width: 100%; overflow-x: auto; border-radius: 10px; background: #10141c; padding-bottom: 8px; }
+#keyboard { position: relative; height: 158px; width: 1664px; }
+.key { position: absolute; top: 0; border: 1px solid #263844; border-radius: 0 0 5px 5px; }
+.white { width: 32px; height: 150px; background: #edf1f7; color: #334455; }
+.black { width: 20px; height: 95px; background: #16202b; z-index: 1; }
+.key span { position: absolute; bottom: 10px; width: 100%; text-align: center; font-size: 10px; }
+.key.sustained { background: #6caaa7; }
+.key.held { background: #91e4d0; box-shadow: inset 0 -5px 0 #35ac90; }
+.help { color: #aebbc9; font-size: .9rem; line-height: 1.65; }
+summary { cursor: pointer; min-height: 48px; padding: 10px 0; color: #f1f5fb; }
+@media(max-width: 440px) { .connection-buttons { grid-template-columns: 1fr; } .controls { padding: 18px; } }
