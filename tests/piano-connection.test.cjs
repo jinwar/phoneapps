@@ -13,7 +13,7 @@ function setup() {
  access.inputs.set(port.id,port);
  const characteristic={listeners:{},addEventListener(n,f){this.listeners[n]=f;},removeEventListener(n){delete this.listeners[n];},async startNotifications(){}};
  const device={name:'BLE Piano',listeners:{},addEventListener(n,f){this.listeners[n]=f;},removeEventListener(n){delete this.listeners[n];},gatt:{connected:false,async connect(){this.connected=true;return this;},disconnect(){this.connected=false;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};}}};
- const navigator={async requestMIDIAccess(){return access;},bluetooth:{async requestDevice(){return device;}}};
+ const navigator={async requestMIDIAccess(){return access;},bluetooth:{async requestDevice(options){navigator.bluetooth.options=options;return device;}}};
  const window={isSecureContext:true,addEventListener(){}};
  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../piano/app.js'),'utf8'),{PianoMidi,document,navigator,window});
  return {elements,port,access,device,characteristic,navigator,requests:()=>requests,click:id=>elements[id].listeners.click()};
@@ -42,4 +42,10 @@ test('cancelled Bluetooth attempt cannot attach a late device',async()=>{
  const app=setup();let resolve;app.navigator.bluetooth.requestDevice=()=>new Promise(r=>resolve=r);
  const start=app.click('bluetooth');await app.click('disconnect');resolve(app.device);await start;
  assert.equal(app.device.gatt.connected,false);assert.equal(app.elements.connection.textContent,'No keyboard connected');
+});
+
+test('Bluetooth picker filters by the standard MIDI service only',async()=>{
+ const app=setup();await app.click('bluetooth');
+ assert.equal(app.navigator.bluetooth.options.filters[0].services[0],'03b80e5a-ede8-4b33-a751-6ce34ec4c700');
+ assert.equal(app.navigator.bluetooth.options.acceptAllDevices,undefined);
 });

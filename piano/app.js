@@ -31,9 +31,10 @@
       $('details').textContent = `Last note: ${noteName(message[1])} · MIDI ${message[1]} · Velocity ${message[2]} / 127 · Channel ${(message[0] & 15) + 1}`;
     }
     render();
+    window.PianoPractice?.receive(message);
   }
   const decoder = new MidiDecoder(receive);
-  function clear() { state.clear(); decoder.reset(); render(); $('details').textContent = 'Play a note on your connected keyboard.'; }
+  function clear() { window.PianoPractice?.clear(); state.clear(); decoder.reset(); render(); $('details').textContent = 'Play a note on your connected keyboard.'; }
   function buttons() {
     $('bluetooth').disabled = busy || !navigator.bluetooth || !window.isSecureContext;
     $('usb').disabled = busy || !navigator.requestMIDIAccess || !window.isSecureContext;
@@ -41,6 +42,7 @@
   }
   function message(text) { $('message').textContent = text; }
   function disconnect(text = 'Disconnected') {
+    window.PianoPractice?.setConnected(false);
     generation++; busy = false; mode = '';
     pendingPort = null;
     if (input) { input.onmidimessage = null; input.close().catch(() => {}); input = null; }
@@ -53,7 +55,7 @@
   function bluetoothData(event) { if (mode === 'bluetooth') decoder.ble(event.target.value); }
   function bluetoothLost() { disconnect('Bluetooth connection lost. Tap Connect Bluetooth to reconnect.'); }
   function errorText(error, transport) {
-    if (error.name === 'NotFoundError') return transport === 'Bluetooth' ? 'No MIDI keyboard selected or MIDI service unavailable. Enable Bluetooth MIDI on the keyboard; try showing all devices.' : 'No MIDI input found.';
+    if (error.name === 'NotFoundError') return transport === 'Bluetooth' ? 'No MIDI keyboard selected or MIDI service unavailable. Enable Bluetooth MIDI on the keyboard. Only devices advertising the MIDI service are listed.' : 'No MIDI input found.';
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError') return `${transport} access was denied. Allow device access in Chrome’s site settings, then try again.`;
     return `${transport} connection failed: ${error.message || 'Try reconnecting the keyboard.'}`;
   }
@@ -63,9 +65,7 @@
     let selected;
     try {
       // requestDevice must run directly from this button's user gesture.
-      selected = await navigator.bluetooth.requestDevice($('all-devices').checked
-        ? {acceptAllDevices: true, optionalServices: [SERVICE]}
-        : {filters: [{services: [SERVICE]}]});
+      selected = await navigator.bluetooth.requestDevice({filters: [{services: [SERVICE]}]});
       if (attempt !== generation) return;
       device = selected; device.addEventListener('gattserverdisconnected', bluetoothLost);
       message('Connecting to the keyboard…');
@@ -78,6 +78,7 @@
       await channel.startNotifications();
       if (attempt !== generation) return;
       $('connection').textContent = `Bluetooth · ${device.name || 'MIDI keyboard'}`;
+      window.PianoPractice?.setConnected(true);
       message('Connected. Play your keyboard to see notes here.');
     } catch (error) {
       if (attempt === generation) disconnect(errorText(error, 'Bluetooth'));
@@ -96,6 +97,7 @@
     return ports;
   }
   async function selectInput(id) {
+    window.PianoPractice?.setConnected(false);
     const attempt = ++generation;
     if (input) { input.onmidimessage = null; input.close().catch(() => {}); input = null; }
     clear(); $('connection').textContent = 'No keyboard selected';
@@ -109,6 +111,7 @@
       input = port; input.onmidimessage = e => { if (input === port) decoder.push(e.data); };
       $('inputs').value = port.id;
       $('connection').textContent = `MIDI · ${port.name || 'Keyboard'}`;
+      window.PianoPractice?.setConnected(true);
       message('Connected. Play your keyboard to see notes here.');
     } catch (error) { if (attempt === generation) message(errorText(error, 'USB / MIDI')); }
     finally { if (attempt === generation) pendingPort = null; }
@@ -123,6 +126,7 @@
       access.onstatechange = event => {
         if (mode !== 'usb') return;
         if (input && event.port.id === input.id && event.port.type === 'input' && event.port.state === 'disconnected') {
+          window.PianoPractice?.setConnected(false);
           generation++; input.onmidimessage = null; input = null; clear(); $('connection').textContent = 'Keyboard unplugged';
           message('Keyboard disconnected. Reconnect it to continue.');
         }

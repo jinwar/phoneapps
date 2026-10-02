@@ -8,9 +8,11 @@
 <title>MIDI Piano · Phone Apps</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
 <script src="midi.js?v=1" defer></script>
-<script src="app.js?v=1" defer></script>
+<script src="score.js?v=2" defer></script>
+<script src="practice.js?v=2" defer></script>
+<script src="app.js?v=2" defer></script>
 </head>
 <body><main class="piano">
 <a class="back" href="../">← All apps</a>
@@ -19,11 +21,26 @@
 <section class="controls" aria-labelledby="connect-title">
 <h2 id="connect-title">Connect a keyboard</h2>
 <div class="connection-buttons"><button id="bluetooth">Connect Bluetooth</button><button id="usb">Connect USB-C / MIDI</button></div>
-<label class="check"><input type="checkbox" id="all-devices"> Show all Bluetooth devices if my keyboard is missing</label>
+<p class="note">The Bluetooth picker shows only devices advertising the standard MIDI service.</p>
 <p class="note" id="compatibility"></p>
 <div id="usb-picker" hidden><label for="inputs">MIDI input</label><select id="inputs"><option value="">Choose a keyboard</option></select></div>
 <div class="connection-state"><span id="connection" role="status">No keyboard connected</span><button id="disconnect" disabled>Disconnect</button></div>
 <p id="message" class="note" role="status">Use Chrome on your Samsung phone and allow device access when asked.</p>
+</section>
+<section class="controls score-practice" aria-labelledby="practice-title">
+<h2 id="practice-title">Practice a score</h2>
+<div class="connection-buttons"><button id="open-local">Load MusicXML file</button><button id="open-drive">Open from Google Drive</button></div>
+<input id="score-file" type="file" accept=".musicxml,.xml,application/xml,text/xml,application/vnd.recordare.musicxml+xml" hidden>
+<p class="note">For Google Drive, choose Drive from the file picker’s ☰ menu. Sign in through the Google Drive app first. Your selected score stays on this phone.</p>
+<h3 id="score-title">No score loaded</h3>
+<div class="score-options"><label>Part <select id="score-part" aria-label="Score part"></select></label><label>Tempo (BPM) <input id="tempo" type="number" min="20" max="240" value="100" inputmode="numeric"></label></div>
+<div class="practice-actions"><button id="demo" disabled>▶ Demonstrate</button><button id="practice" disabled>Practice with keyboard</button><button id="restart" disabled>Restart</button></div>
+<div class="practice-target"><strong id="target">Load a score to begin</strong><span id="progress">No score loaded</span></div>
+<p id="practice-message" role="status" class="note">Load an uncompressed .musicxml or .xml file. Connect your keyboard to practice; demonstration plays on your phone.</p>
+<div id="score-notes" role="group" aria-label="Practice score. Tap a note to jump to that position."></div>
+<p class="note">Tap a note to change position. In Practice, correct pitches advance the score; wrong keys wait. Play chord notes together. Rests advance automatically. Rhythm is not graded.</p>
+<details><summary>About this practice view</summary><p class="note">Simplified concert-pitch notation: treble and bass staves, explicit sharps, and note names. Original engraving, beams, lyrics, ornaments, and key signatures are not reproduced. Tied notes are combined into one held note. Demonstration uses a synthesized tone at your selected tempo; repeats are played once in written order. Compressed .mxl files should be exported as .musicxml first.</p></details>
+<p id="score-warnings" class="note"></p>
 </section>
 <section class="controls performance" aria-labelledby="notes-title">
 <div class="section-title"><h2 id="notes-title">Your notes</h2><button id="clear">Clear notes</button></div>
@@ -33,10 +50,10 @@
 <p class="note">88-key display · swipe sideways · middle C is C4. Notes outside this range still appear above.</p>
 </section>
 <details class="help"><summary>Connection help</summary>
-<p><strong>Bluetooth:</strong> Enable Bluetooth and the piano’s Bluetooth MIDI mode. Tap Connect Bluetooth and choose the keyboard. If it is missing, try “Show all Bluetooth devices.” Close other music apps that may already be connected. Some Android versions also require location services for Bluetooth discovery.</p>
+<p><strong>Bluetooth:</strong> Enable Bluetooth and the piano’s Bluetooth MIDI mode. Tap Connect Bluetooth and choose the keyboard. Only devices advertising the standard BLE-MIDI service appear. If yours is missing, enable its Bluetooth MIDI mode or use USB-C. Close other music apps that may already be connected. Some Android versions also require location services for Bluetooth discovery.</p>
 <p><strong>USB-C:</strong> Use a data-capable USB cable or USB-C OTG adapter. Connect to the piano’s USB-to-host port, then tap Connect USB-C / MIDI and allow access. Choose your keyboard from the list. Use external keyboard power or a powered hub if your phone cannot supply enough power.</p>
 <p>The keyboard must support standard BLE-MIDI or class-compliant USB MIDI. Bluetooth audio-only devices do not send notes. USB device names come from Android and may not identify the connection type.</p>
-<p>This app displays incoming MIDI; it does not generate sound. Use your piano’s own speakers. Notes stay on this device and are not recorded or uploaded. Only one connection is active at a time.</p>
+<p>Live playing uses your piano’s own speakers. Demonstration plays synthesized notes through the phone. Scores and notes stay on this device and are not uploaded. Only one connection is active at a time.</p>
 </details>
 <noscript><p>Enable JavaScript to connect your keyboard.</p></noscript>
 </main></body></html>
