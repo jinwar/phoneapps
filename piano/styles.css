@@ -34,10 +34,11 @@ summary { cursor: pointer; min-height: 48px; padding: 10px 0; color: #f1f5fb; }
 .practice-target { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; margin-top: 24px; align-items: center; }
 #target { color: #91e4d0; font-size: 1.4rem; }
 #progress { font-size: .85rem; color: #aebbc9; }
-#score-notes { display: flex; overflow-x: auto; gap: 4px; max-height: 280px; padding: 8px 2px 16px; scroll-snap-type: x proximity; }
-.score-note { flex: 0 0 116px; padding: 0; border: 3px solid transparent; border-radius: 10px; background: #f7fafc; color: #1b2e40; scroll-snap-align: center; }
-.score-note svg { display: block; width: 110px; height: 215px; }
-.score-note.current { border-color: #28bd99; background: #d5f8ed; box-shadow: 0 0 0 1px #28bd99; }
-.score-note.done { background: #dbe7ee; opacity: .7; }
-.score-note:focus-visible { outline-color: #91e4d0; }
+#score-window { overflow: auto; max-height: 70vh; margin: 18px 0; border-radius: 10px; background: white; overscroll-behavior: contain; }
+#score-notes { position: relative; min-width: 620px; color: #111; background: #fff; cursor: crosshair; }
+.score-paper { width: 100%; }
+.score-paper svg { display: block; }
+.score-cursor { position: absolute; width: 3px; margin-left: -1px; background: #078eae; box-shadow: 0 0 0 4px #08aace26; pointer-events: none; z-index: 3; }
+.score-cursor.complete { background: #168453; }
+#score-notes:focus-visible { outline: 3px solid #078eae; outline-offset: -3px; }
 #score-title { overflow-wrap: anywhere; }

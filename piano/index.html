@@ -8,11 +8,13 @@
 <title>MIDI Piano · Phone Apps</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="styles.css?v=2">
+<link rel="stylesheet" href="styles.css?v=3">
 <script src="midi.js?v=1" defer></script>
-<script src="score.js?v=2" defer></script>
+<script src="score.js?v=3" defer></script>
 <script src="files.js?v=1" defer></script>
-<script src="practice.js?v=3" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.9.2/build/opensheetmusicdisplay.min.js" defer></script>
+<script src="notation.js?v=1" defer></script>
+<script src="practice.js?v=4" defer></script>
 <script src="app.js?v=2" defer></script>
 </head>
 <body><main class="piano">
@@ -38,9 +40,9 @@
 <div class="practice-actions"><button id="demo" disabled>▶ Demonstrate</button><button id="practice" disabled>Practice with keyboard</button><button id="restart" disabled>Restart</button></div>
 <div class="practice-target"><strong id="target">Load a score to begin</strong><span id="progress">No score loaded</span></div>
 <p id="practice-message" role="status" class="note">Load a .mxl, .musicxml, or .xml file. Connect your keyboard to practice; demonstration plays on your phone.</p>
-<div id="score-notes" role="group" aria-label="Practice score. Tap a note to jump to that position."></div>
+<div id="score-window"><div id="score-notes" tabindex="0" role="group" aria-label="Practice score. Tap a note to jump to that position."></div></div>
 <p class="note">Tap a note to change position. In Practice, correct pitches advance the score; wrong keys wait. Play chord notes together. Rests advance automatically. Rhythm is not graded.</p>
-<details><summary>About this practice view</summary><p class="note">Simplified concert-pitch notation: treble and bass staves, explicit sharps, and note names. Original engraving, beams, lyrics, ornaments, and key signatures are not reproduced. Tied notes are combined into one held note. Demonstration uses a synthesized tone at your selected tempo; repeats are played once in written order. Compressed .mxl files are unpacked directly on your phone.</p></details>
+<details><summary>About this practice view</summary><p class="note">Standard sheet music with the score’s clefs, key signatures, rhythms, beams, and ties. A moving line follows demonstration; during practice it waits for the correct keys. Select a part to display and practice. Tied notes are held without replaying. Repeats play once in written order; grace and cue notes are displayed but skipped. Tempo is controlled above, and rhythm is not graded. Compressed .mxl files are unpacked on your phone. Sheet engraving uses OpenSheetMusicDisplay, loaded from jsDelivr; your score is not uploaded.</p></details>
 <p id="score-warnings" class="note"></p>
 </section>
 <section class="controls performance" aria-labelledby="notes-title">

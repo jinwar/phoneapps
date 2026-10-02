@@ -14,7 +14,7 @@ function parseDocument(doc) {
  const warnings=new Set();
  const parts=children(root,'part').map((part,partIndex)=>{
   let divisions=1, beats=4, transpose=0, base=0, tempo=100;
-  const notes=[], rests=[], ties=new Map();
+  const notes=[], rests=[], ties=new Map(), measureTimes=[];
   const measures=children(part,'measure');
   measures.forEach((measure,mi)=>{
    let position=0,lastStart=0,max=0;
@@ -35,7 +35,7 @@ function parseDocument(doc) {
     if(tag==='barline' && one(item,'repeat')) warnings.add('Repeat signs are not repeated automatically; tap a note to return.');
     if(tag==='backup' || tag==='forward') {position+=(tag==='backup'?-1:1)*num(item,'duration')/divisions;position=Math.max(0,position);max=Math.max(max,position);}
     if(tag!=='note')continue;
-    if(one(item,'grace') || one(item,'cue')){warnings.add('Grace and cue notes are omitted in this practice view.');continue;}
+    if(one(item,'grace') || one(item,'cue')){warnings.add('Grace and cue notes are displayed but skipped during practice and demonstration.');continue;}
     const duration=num(item,'duration')/divisions;
     if(!Number.isFinite(duration)||duration<=0)throw Error('A note has an invalid or missing duration.');
     const start=one(item,'chord')?lastStart:position;
@@ -62,9 +62,11 @@ function parseDocument(doc) {
     }
     if(++count>20000)throw Error('This score is too large. Please export a shorter section (under 20,000 notes).');
    }
+   const start=base;
    base+=Math.max(max,measure.getAttribute('implicit')==='yes'?0:beats);
+   measureTimes.push({start,end:base});
   });
-  return {name:names.get(part.getAttribute('id')) || `Part ${partIndex+1}`,notes,rests,end:base,tempo};
+  return {name:names.get(part.getAttribute('id')) || `Part ${partIndex+1}`,notes,rests,measures:measureTimes,end:base,tempo};
  });
  if(!parts.some(p=>p.notes.length))throw Error('No pitched notes were found in this score.');
  return {title:text(one(root,'work') || {},'work-title',text(root,'movement-title','Untitled score')),parts,warnings:[...warnings]};
