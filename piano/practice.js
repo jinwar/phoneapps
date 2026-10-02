@@ -7,7 +7,7 @@ let scoreXML='',renderVersion=0,rendering=false;
 const notation=new PianoNotation($('score-notes'),jumpTo);
 const tempo=()=>Math.max(20,Math.min(240,Number($('tempo').value)||100));
 function info(s){$('practice-message').textContent=s;}
-function stop(){demoAttempt++;clearInterval(clock);clock=null;for(const v of voices){try{v.stop();}catch{}}voices.clear();mode='idle';$('demo').textContent='▶ Demonstrate';$('practice').textContent='Practice with keyboard';$('tempo').disabled=false;}
+function stop(){demoAttempt++;clearInterval(clock);clock=null;for(const v of voices){try{v.stop();}catch{}}voices.clear();mode='idle';$('demo').textContent='▶ Demo';$('practice').textContent='Practice';$('tempo').disabled=false;}
 function update(scroll=false){
  const index=follower?.index ?? 0;
  notation.position(index,null,scroll);
@@ -18,26 +18,54 @@ function update(scroll=false){
 }
 function jumpTo(index){
  if(rendering||!follower)return;
- const practicing=mode==='practice';stop();follower.jump(index);if(practicing){mode='practice';follower.skipRests();$('practice').textContent='Pause practice';}update(true);info('Position changed. '+(practicing?'Play the notes at the line.':'Choose Demonstrate or Practice.'));
+ const practicing=mode==='practice';stop();follower.jump(index);if(practicing){mode='practice';follower.skipRests();$('practice').textContent='Pause';}update(true);info('Position changed. '+(practicing?'Play the notes at the line.':'Choose Demonstrate or Practice.'));
 }
 async function selectPart(){
  stop();const version=++renderVersion,partIndex=Number($('score-part').value),part=score.parts[partIndex];
  rendering=true;events=eventsFor(part);follower=new Follower(events);follower.jump(0);$('tempo').value=Math.round(Math.min(240,Math.max(20,part.tempo)));update();info('Preparing sheet music…');
- try{await notation.load(scoreXML,partIndex,part,events);if(version!==renderVersion)return;rendering=false;update();info('Ready. Tap a note to choose a starting point.');}
+ try{await notation.load(scoreXML,partIndex,part,events);if(version!==renderVersion)return;rendering=false;update();info('Ready. Tap a note to choose a starting point.');return true;}
  catch(error){if(version!==renderVersion)return;events=[];rendering=false;update();info(`Could not display score: ${error.message}`);}
 }
-async function load(file){
+async function load(file,saved=null){
  const version=++loadVersion;if(!file)return;stop();
- ++renderVersion;++notation.version;rendering=true;events=[];follower=null;notation.points=[];if(notation.line)notation.line.hidden=true;update();info('Loading score…');
+ ++renderVersion;++notation.version;rendering=true;events=[];follower=null;notation.points=[];notation.ready=false;if(notation.line)notation.line.hidden=true;update();info('Loading score…');
  try{
-  const content=await PianoFiles.readScore(file);if(version!==loadVersion)return;
+  const content=saved?saved.xml:await PianoFiles.readScore(file);if(version!==loadVersion)return;
   const parsed=parseDocument(new DOMParser().parseFromString(content,'application/xml'));
   scoreXML=content;score=parsed;$('score-title').textContent=score.title==='Untitled score'?file.name:score.title;
   $('score-part').replaceChildren();score.parts.forEach((p,i)=>{const option=document.createElement('option');option.value=i;option.textContent=p.name;option.disabled=!p.notes.length;$('score-part').append(option);});
   $('score-part').value=score.parts.findIndex(p=>p.notes.length);
-  $('score-warnings').textContent=score.warnings.join(' ');await selectPart();
+  $('score-warnings').textContent=score.warnings.join(' ');const ready=await selectPart();
+  if(version!==loadVersion||!ready)return;
+  window.PianoView.enter();window.PianoView.showLibrary(false);
+  try{
+   const item=await PianoLibrary.save({xml:content,title:$('score-title').textContent,name:file.name});
+   if(version!==loadVersion)return;
+   await refreshSaved(item.id);$('library-message').textContent='Saved on this device. Select a score to open it again. Keep your original files; clearing site data removes saved copies.';
+  }catch(error){if(version===loadVersion){$('library-message').textContent=`Score opened, but could not be saved: ${error.message}`;info('Score ready, but saving failed. Keep the original file and try again.');}}
+
  }catch(error){if(version===loadVersion){rendering=false;update();info(`Could not load score: ${error.message}`);}}
 }
+let savedItems=[];
+async function refreshSaved(selected=$('saved-scores').value){
+ savedItems=await PianoLibrary.list();$('saved-scores').replaceChildren();
+ const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=savedItems.length?'Choose a saved score…':'No saved scores yet';$('saved-scores').append(placeholder);
+ for(const item of savedItems){const option=document.createElement('option');option.value=item.id;option.textContent=`${item.title} — ${item.name}`;$('saved-scores').append(option);}
+ $('saved-scores').value=savedItems.some(item=>item.id===selected)?selected:'';savedSelection();
+}
+function savedSelection(){const selected=!!$('saved-scores').value;$('open-saved').disabled=!selected;$('delete-saved').disabled=!selected;}
+$('saved-scores').addEventListener('change',savedSelection);
+$('open-saved').addEventListener('click',async()=>{
+ const id=$('saved-scores').value;if(!id)return;
+ try{const item=await PianoLibrary.get(id);if(!item){await refreshSaved();throw Error('That saved score was removed.');}await load({name:item.name},item);}
+ catch(error){$('library-message').textContent=`Could not open saved score: ${error.message}`;}
+});
+$('delete-saved').addEventListener('click',async()=>{
+ const id=$('saved-scores').value,item=savedItems.find(item=>item.id===id);if(!item||!window.confirm(`Remove the saved copy of “${item.title}” from this browser? Your original file is unchanged.`))return;
+ try{await PianoLibrary.remove(id);await refreshSaved();$('library-message').textContent='Saved copy removed. You can import the original file again.';}
+ catch(error){$('library-message').textContent=`Could not remove saved score: ${error.message}`;}
+});
+refreshSaved().catch(error=>{$('library-message').textContent=`Saved scores are unavailable: ${error.message} You can still open a file.`;});
 $('score-file').addEventListener('change',e=>{load(e.target.files[0]);e.target.value='';});
 $('open-local').addEventListener('click',()=>$('score-file').click());
 $('open-drive').addEventListener('click',()=>{info('In the file picker, open the ☰ menu and choose Google Drive. If Drive is missing, install/open the Google Drive app and sign in, then try again.');$('score-file').click();});
@@ -47,7 +75,7 @@ $('restart').addEventListener('click',()=>{stop();follower.jump(0);update(true);
 $('practice').addEventListener('click',()=>{
  if(mode==='practice'){stop();info('Practice paused.');return;}
  stop();if(!connected){info('Connect your keyboard first.');return;}
- if(follower.index>=events.length)follower.jump(0);follower.down.clear();follower.skipRests();mode='practice';$('practice').textContent='Pause practice';update(true);info('Play the notes at the line. For a chord, press all the indicated keys together.');
+ if(follower.index>=events.length)follower.jump(0);follower.down.clear();follower.skipRests();mode='practice';$('practice').textContent='Pause';update(true);info('Play the notes at the line. For a chord, press all the indicated keys together.');
 });
 function playNote(n,when,seconds){
  const osc=audio.createOscillator(),gain=audio.createGain();osc.type='triangle';osc.frequency.value=440*2**((n.midi-69)/12);
@@ -73,7 +101,7 @@ $('demo').addEventListener('click',async()=>{
   audio ||= new (window.AudioContext||window.webkitAudioContext)();await audio.resume();
   if(attempt!==demoAttempt||document.hidden)return;
   if(follower.index>=events.length)follower.jump(0);
-  mode='demo';$('demo').textContent='■ Stop demonstration';$('tempo').disabled=true;follower.down.clear();
+  mode='demo';$('demo').textContent='■ Stop';$('tempo').disabled=true;follower.down.clear();
   nextEvent=follower.index;demoBeat=events[nextEvent].time;demoStart=audio.currentTime+.08;
   update(true);info('Playing through your phone speakers.');tick();clock=setInterval(tick,30);
  }catch(error){stop();info(`Audio could not start: ${error.message}`);}
