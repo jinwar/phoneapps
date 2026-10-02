@@ -54,9 +54,7 @@ function selectPart(){stop();const part=score.parts[Number($('score-part').value
 async function load(file){
  const version=++loadVersion;if(!file)return;stop();
  try{
-  if(file.size>5*1024*1024)throw Error('Please choose a MusicXML file smaller than 5 MB.');
-  if(/\.mxl$/i.test(file.name))throw Error('Compressed .mxl is not supported yet. Export as .musicxml or .xml.');
-  const content=await file.text();if(version!==loadVersion)return;
+  const content=await PianoFiles.readScore(file);if(version!==loadVersion)return;
   const parsed=parseDocument(new DOMParser().parseFromString(content,'application/xml'));
   score=parsed;$('score-title').textContent=score.title==='Untitled score'?file.name:score.title;
   $('score-part').replaceChildren();score.parts.forEach((p,i)=>{const option=document.createElement('option');option.value=i;option.textContent=p.name;option.disabled=!p.notes.length;$('score-part').append(option);});

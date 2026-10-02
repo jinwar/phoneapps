@@ -7,7 +7,7 @@ const num=(node,name,fallback=0)=>Number(text(node,name,String(fallback)));
 function parseDocument(doc) {
  if (doc.getElementsByTagName('parsererror').length) throw Error('This file is not valid XML.');
  const root=doc.documentElement;
- if(root.localName!=='score-partwise') throw Error('Please export as uncompressed, partwise MusicXML (.musicxml or .xml).');
+ if(root.localName!=='score-partwise') throw Error('Please export as partwise MusicXML (.mxl, .musicxml, or .xml).');
  const list=one(root,'part-list');
  const names=new Map(children(list || {},'score-part').map(p=>[p.getAttribute('id'),text(p,'part-name','Part')]));
  let count=0;

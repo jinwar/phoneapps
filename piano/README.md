@@ -25,13 +25,13 @@ Requires a standard BLE-MIDI keyboard or a class-compliant USB MIDI keyboard, a 
 
 ## MusicXML practice
 
-Load an uncompressed, partwise `.musicxml` or `.xml` file (up to 5 MB). Select a part if the file contains multiple instruments. Notes from both piano staves/voices are grouped by onset; ties are combined and accidentals/transposition are converted to sounding MIDI pitches.
+Load a partwise `.mxl`, `.musicxml`, or `.xml` file (up to 20 MB, with a 20 MB expanded score limit). Compressed MXL files are unpacked locally, following `META-INF/container.xml`; stored and DEFLATE ZIP entries are supported. This works for local files and Google Drive selections. Select a part if the file contains multiple instruments. Notes from both piano staves/voices are grouped by onset; ties are combined and accidentals/transposition are converted to sounding MIDI pitches.
 
 - **Demonstrate** plays synthesized notes at the selected tempo and highlights the current position. Stop, changing part, jumping to a note, or hiding the app stops playback.
 - **Practice with keyboard** waits for correct note-on events. Chords require their pitches together; wrong keys block progress until released. Rests are skipped, and timing is not graded.
 - Tap any note tile to jump. In Practice, the new position stays active; during demonstration, tapping stops audio and selects a new starting point.
 - **Open from Google Drive** invokes Android's system document picker. Select Google Drive in its navigation menu; install/sign in to the Drive app if the provider is unavailable. This is per-file access through Android, not a browser OAuth connection or account-wide Drive access. No Google API key/client ID or backend is required. Local and Drive selections use the same private file-loading path.
 
-The display is simplified concert-pitch practice notation, not full MusicXML engraving. Original key signatures, beams, lyrics, ornaments and layout are not reproduced. Grace/cue and unpitched notes are omitted with a message; repeat navigation is not expanded. Compressed `.mxl` and `score-timewise` should be exported as partwise `.musicxml` first. Tempo changes are replaced by the selected tempo.
+The display is simplified concert-pitch practice notation, not full MusicXML engraving. Original key signatures, beams, lyrics, ornaments and layout are not reproduced. Grace/cue and unpitched notes are omitted with a message; repeat navigation is not expanded. `score-timewise` should be exported as partwise MusicXML first. Tempo changes are replaced by the selected tempo.
 
 Additional tests: `node tests/practice-ui.test.cjs` (includes parser/follower fixtures) and `node tests/piano-connection.test.cjs`. XML DOM fixtures are generated from `tests/fixtures/practice.musicxml`; UI/audio/device tests use mocks and do not replace on-phone verification.

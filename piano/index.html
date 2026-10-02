@@ -11,7 +11,8 @@
 <link rel="stylesheet" href="styles.css?v=2">
 <script src="midi.js?v=1" defer></script>
 <script src="score.js?v=2" defer></script>
-<script src="practice.js?v=2" defer></script>
+<script src="files.js?v=1" defer></script>
+<script src="practice.js?v=3" defer></script>
 <script src="app.js?v=2" defer></script>
 </head>
 <body><main class="piano">
@@ -30,16 +31,16 @@
 <section class="controls score-practice" aria-labelledby="practice-title">
 <h2 id="practice-title">Practice a score</h2>
 <div class="connection-buttons"><button id="open-local">Load MusicXML file</button><button id="open-drive">Open from Google Drive</button></div>
-<input id="score-file" type="file" accept=".musicxml,.xml,application/xml,text/xml,application/vnd.recordare.musicxml+xml" hidden>
+<input id="score-file" type="file" accept=".mxl,.musicxml,.xml,application/vnd.recordare.musicxml,application/zip,application/xml,text/xml,application/vnd.recordare.musicxml+xml" hidden>
 <p class="note">For Google Drive, choose Drive from the file picker’s ☰ menu. Sign in through the Google Drive app first. Your selected score stays on this phone.</p>
 <h3 id="score-title">No score loaded</h3>
 <div class="score-options"><label>Part <select id="score-part" aria-label="Score part"></select></label><label>Tempo (BPM) <input id="tempo" type="number" min="20" max="240" value="100" inputmode="numeric"></label></div>
 <div class="practice-actions"><button id="demo" disabled>▶ Demonstrate</button><button id="practice" disabled>Practice with keyboard</button><button id="restart" disabled>Restart</button></div>
 <div class="practice-target"><strong id="target">Load a score to begin</strong><span id="progress">No score loaded</span></div>
-<p id="practice-message" role="status" class="note">Load an uncompressed .musicxml or .xml file. Connect your keyboard to practice; demonstration plays on your phone.</p>
+<p id="practice-message" role="status" class="note">Load a .mxl, .musicxml, or .xml file. Connect your keyboard to practice; demonstration plays on your phone.</p>
 <div id="score-notes" role="group" aria-label="Practice score. Tap a note to jump to that position."></div>
 <p class="note">Tap a note to change position. In Practice, correct pitches advance the score; wrong keys wait. Play chord notes together. Rests advance automatically. Rhythm is not graded.</p>
-<details><summary>About this practice view</summary><p class="note">Simplified concert-pitch notation: treble and bass staves, explicit sharps, and note names. Original engraving, beams, lyrics, ornaments, and key signatures are not reproduced. Tied notes are combined into one held note. Demonstration uses a synthesized tone at your selected tempo; repeats are played once in written order. Compressed .mxl files should be exported as .musicxml first.</p></details>
+<details><summary>About this practice view</summary><p class="note">Simplified concert-pitch notation: treble and bass staves, explicit sharps, and note names. Original engraving, beams, lyrics, ornaments, and key signatures are not reproduced. Tied notes are combined into one held note. Demonstration uses a synthesized tone at your selected tempo; repeats are played once in written order. Compressed .mxl files are unpacked directly on your phone.</p></details>
 <p id="score-warnings" class="note"></p>
 </section>
 <section class="controls performance" aria-labelledby="notes-title">
