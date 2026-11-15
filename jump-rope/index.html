@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101d22"><title>Jump Rope</title>
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<header><span class="mark">↟</span><div><p class="eyebrow">MOVE AT YOUR OWN PACE</p><h1>Jump Rope</h1></div><span class="badge">On-device</span></header>
+<section class="counter" aria-label="Workout">
+<p id="status" role="status">Ready when you are</p>
+<div id="count">0</div><p class="unit">JUMPS</p>
+<div class="metrics"><div><strong id="duration">00:00</strong><span>active time</span></div><div><strong id="pace">—</strong><span>jumps / min</span></div></div>
+<div class="actions"><button id="start" class="primary">Start jumping</button><button id="finish" disabled>Finish & save</button></div>
+<p id="message" role="status">Hold your folded phone securely. Keep your hand near your waist and jump in place.</p>
+</section>
+<section class="settings"><label for="sensitivity">Detection sensitivity <output id="sensitivityValue">Balanced</output></label><input id="sensitivity" type="range" min="1" max="5" value="3"><p>Try 20 counted jumps first. Increase sensitivity for missed jumps; decrease it for extra counts. Hand movements can count as jumps.</p></section>
+<section><div class="section-title"><h2>Your workouts</h2><button id="export" class="text-button">Export JSON</button></div><p class="muted">Saved only in this browser on this phone. Export a backup before clearing browser data.</p><p id="storageError" role="alert"></p><div id="history"></div></section>
+<details><summary>How it works</summary><p>Your phone’s motion sensor measures the bounce of each jump. Counts are estimates, not verified jumps. Keep this app visible and the screen unlocked; switching apps pauses counting. The app requests a screen wake lock when supported.</p><p>Workouts stay on this device. No account or Samsung Health connection is needed. Install from your browser’s menu for quick access; after the first visit, the app works offline.</p></details>
+<footer>No rope. No account. Just move.</footer>
+</main><script type="module" src="app.mjs"></script>
+</body></html>
