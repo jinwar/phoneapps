@@ -38,3 +38,38 @@ test('cadence excludes long rests; report does not confuse session rate with int
  assert.equal(st.count,5);assert.equal(st.averageRate,50);assert.equal(st.medianRate,60);assert.equal(st.peakRate,60);assert.equal(st.sessionRate,25);assert.ok(st.intervalVariation>0);
  assert.equal(statistics({type:'jumping',duration:0,samples:[]}).peakRate,null);
 });
+
+test('automatic report keeps separate counts and does not compute cadence across type changes',()=>{
+ const st=statistics({type:'auto',duration:10,samples:[],detections:{stationary:[{time:1},{time:2}],jumping:[{time:2.1},{time:3.1}]}});
+ assert.equal(st.count,4);assert.equal(st.stationaryCount,2);assert.equal(st.jumpingCount,2);assert.equal(st.peakRate,60);
+});
+test('model upgrade preserves earlier calibration metadata and rejects unknown versions',async()=>{
+ const {migrateModel,VERSION}=await import('../suburi/detector.mjs');
+ const old={version:'suburi-1.0.0',revision:1,settings:{...DEFAULTS,weak:.55},calibrationSessionIds:['example']};
+ const updated=migrateModel(old);assert.equal(updated.version,VERSION);assert.equal(updated.revision,2);assert.deepEqual(updated.previousModel,old);assert.equal(updated.settings.weak,.45);
+ assert.equal(migrateModel(updated),updated);assert.throws(()=>migrateModel({...old,version:'unknown'}));
+});
+test('native share uses byte-identical JSON inside a shareable text attachment',async()=>{
+ const {shareFile,shareFailure}=await import('../suburi/export.mjs');
+ const source=new File(['{"schema":"phoneapps.suburi.dataset","sessions":[]}'],'data.json',{type:'application/json'});
+ const text=shareFile(source);assert.equal(text.name,'data.json.txt');assert.equal(text.type,'text/plain');assert.equal(await text.text(),await source.text());
+ assert.match(shareFailure({name:'NotAllowedError',message:'Permission denied'}),/Export data/);
+ assert.match(shareFailure({name:'AbortError',message:'Cancelled'}),/cancelled/);
+});
+
+test('stationary path skips an intervening distractor instead of losing the repetition sequence',async()=>{
+ const {detectPrepared}=await import('../suburi/detector.mjs');
+ const rows=Array.from({length:660},(_,i)=>[i/60,0,0,0]),scores=[Array(600).fill(0),Array(600).fill(0)];
+ for(const [time,kind]of [[2,0],[3.3,1],[4.6,0],[5.9,1],[7.2,0],[8.5,1]])scores[kind][Math.round(time*60)-30]=.9;
+ scores[0][Math.round(5.95*60)-30]=.66;
+ const result=detectPrepared([{rows,scores,negativeY:rows.map(()=>0)}]);
+ assert.equal(result.stationary.length,6);assert.equal(result.events.length,6);assert.ok(result.events.every(e=>e.type==='stationary'));
+});
+
+test('jump path retains real rhythmic peaks around a stronger off-cadence distractor',async()=>{
+ const {detectPrepared}=await import('../suburi/detector.mjs');
+ const rows=Array.from({length:780},(_,i)=>[i/60,0,0,0]),negativeY=rows.map(()=>0),scores=[Array(720).fill(0),Array(720).fill(0)];
+ for(let i=0;i<10;i++)negativeY[Math.round((2+i*.8)*60)]=24;
+ negativeY[Math.round(3.2*60)]=40;
+ const result=detectPrepared([{rows,scores,negativeY}]);assert.equal(result.jumping.length,10);assert.equal(result.stationary.length,0);assert.ok(!result.jumping.some(e=>Math.abs(e.time-3.2)<.01));
+});

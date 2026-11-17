@@ -2,3 +2,5 @@
 
 .back{display:inline-flex;align-items:center;min-height:44px;margin-bottom:12px;text-decoration:none}
 .counter{text-align:center;padding:18px}.counter strong{font:700 76px ui-monospace,monospace;display:block;color:#b5f5cc}.counter span{font-size:13px;color:#9dafc2}.range,.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.report-grid{margin-top:18px}.report-grid div{padding:12px;background:#0b1622;border-radius:10px}.report-grid strong{display:block;font-size:22px;margin-top:6px}.report-grid span{font-size:12px;color:#9dafc2}#calibrate{width:100%;margin-top:18px}#chart{height:220px;margin-bottom:8px}#status,#storage-status,#calibration-status,#export-status{overflow-wrap:anywhere}select{font-size:15px}input{font-size:16px}[hidden]{display:none!important}.mark{font-size:22px}.stats strong{font-size:18px}.actions{grid-template-columns:2fr 1fr}@media(max-width:360px){.stats strong{font-size:15px}.report-grid strong{font-size:19px}}
+
+.type-legend{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-size:13px}.stationary{color:#b5f5cc}.jumping{color:#8fc7ff}#activity{font-size:13px;color:#c9d9e8}

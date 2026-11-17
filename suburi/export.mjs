@@ -13,3 +13,12 @@ export async function upload(file,clientId){
  if(!response.ok)throw Error(`Drive upload failed (${response.status}). Check your Drive API setup.`);
  const result=await response.json();if(!result.id)throw Error('No file ID received. Check My Drive before retrying.');return `https://drive.google.com/file/d/${encodeURIComponent(result.id)}/view`;
 }
+// Chrome/Android may reject JSON attachments even with a valid user gesture.
+// A .txt extension and text/plain are widely accepted Web Share file types.
+// Contents stay exactly the same JSON, so analysis tools can JSON.parse it.
+export function shareFile(file){return new File([file],`${file.name}.txt`,{type:'text/plain'});}
+export function shareFailure(error){
+ if(error.name==='AbortError')return 'Sharing cancelled. Your data is still available.';
+ if(error.name==='NotAllowedError'||/permission|denied/i.test(error.message))return 'The phone or browser denied file sharing. Use Export data to save the JSON, then upload it from the Google Drive app. You can also use direct Drive upload below. Your recording is safe.';
+ return `Sharing failed: ${error.message}. Use Export data and upload the saved file in Drive.`;
+}

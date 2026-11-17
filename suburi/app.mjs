@@ -1,15 +1,15 @@
-import {VERSION,DEFAULTS,validSettings} from './detector.mjs';
+import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.0';
 import {openDatabase,readAll,save} from './storage.mjs';
-import {cadence,statistics} from './stats.mjs';
-import {loadGoogle,download,upload} from './export.mjs';
-const $=id=>document.getElementById(id),TYPES={stationary:'Stationary',jumping:'Jumping',forward:'Forward-moving',other:'Walking / other'};
+import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.0';
+import {loadGoogle,download,upload,shareFile,shareFailure} from './export.mjs?v=1.1.0';
+const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Stationary',jumping:'Jumping',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000,MAX_SESSIONS=30;
 let db,templates,model={version:VERSION,revision:0,settings:{...DEFAULTS}},sessions=[],selected=null,running=false,busy=false,ready=false;
 let started=0,lastSample=0,worker,sequence=0,wakeLock=null,storageHealthy=true,unsaved=false,livePending=false,lastCheckpoint=0;
 const pending=new Map();
 function workerCall(action,args){return new Promise((resolve,reject)=>{const id=++sequence;pending.set(id,{resolve,reject});worker.postMessage({id,action,...args});});}
 function controls(){
- $('start').disabled=!ready||running||busy;$('stop').disabled=!running||busy;$('type').disabled=running||busy;
+ $('start').disabled=!ready||running||busy;$('stop').disabled=!running||busy;
  $('history').disabled=running||busy;
  $('calibrate').disabled=!selected||running||busy||!selected.samples.length;
  for(const id of ['label-type','actual','range-start','range-end','notes'])$(id).disabled=running||busy||!selected;
@@ -31,9 +31,11 @@ async function persist(session,updatedModel=null){
 }
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 function render(){
- const s=selected,events=s?.detections?.[s.type]||[],supported=s&&['stationary','jumping'].includes(s.type);
+ const s=selected,events=s?sessionEvents(s):[],supported=s&&['auto','stationary','jumping'].includes(s.type);
  const duration=running?(performance.now()-started)/1000:(s?.duration||0);
  $('count').textContent=s&&!supported?'—':events.length;$('count-label').textContent=s&&!supported?'data collection only':'estimated swings';
+ $('stationary-count').textContent=events.filter(e=>e.type==='stationary').length;$('jumping-count').textContent=events.filter(e=>e.type==='jumping').length;
+ const last=events.at(-1);$('activity').textContent=running?(last&&duration-last.time<=4?`Detected: ${TYPES[last.type]} suburi`:'Listening for a repeating swing pattern…'):'Stationary and jumping swings are detected automatically.';
  $('duration').textContent=fmt(duration);$('samples').textContent=(s?.samples.length||0).toLocaleString();
  const rates=cadence(events),recent=rates.slice(-3);const fresh=recent.length&&duration-recent.at(-1).time<=4;
  $('pace').textContent=fresh?`${Math.round(recent.reduce((x,p)=>x+p.rate,0)/recent.length)} / min`:'—';
@@ -48,21 +50,31 @@ function draw(points,events,duration){
  ctx.font='11px system-ui';ctx.lineWidth=1;ctx.strokeStyle='#2a3a4c';ctx.fillStyle='#9dafc2';
  for(let i=0;i<=4;i++){const y=top+h-h*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(width-right,y);ctx.stroke();ctx.fillText(String(Math.round(maxRate*i/4)),2,y+4);}
  for(let i=0;i<=4;i++)ctx.fillText(`${Math.round(maxTime*i/4)}s`,left+w*i/4-8,height-8);
- ctx.strokeStyle='#b5f5cc';ctx.lineWidth=2;ctx.beginPath();let previous=null;
- for(const p of points){const x=left+p.time/maxTime*w,y=top+h-p.rate/maxRate*h;if(!previous||p.time-previous.time>4)ctx.moveTo(x,y);else ctx.lineTo(x,y);previous=p;}ctx.stroke();
- ctx.fillStyle='#b5f5cc';for(const p of points){ctx.beginPath();ctx.arc(left+p.time/maxTime*w,top+h-p.rate/maxRate*h,2.4,0,2*Math.PI);ctx.fill();}
- ctx.fillStyle='#8fc7ff';for(const e of events)ctx.fillRect(left+e.time/maxTime*w,top+h-4,1.5,4);
+ const colors={stationary:'#b5f5cc',jumping:'#8fc7ff'};
+ for(const type of ['stationary','jumping']){
+   ctx.strokeStyle=colors[type];ctx.lineWidth=2;ctx.beginPath();let previous=null;
+   for(const p of points){
+     if(p.type!==type){previous=null;continue;}
+     const x=left+p.time/maxTime*w,y=top+h-p.rate/maxRate*h;
+     if(!previous||p.time-previous.time>4)ctx.moveTo(x,y);else ctx.lineTo(x,y);previous=p;
+   }ctx.stroke();ctx.fillStyle=colors[type];
+   for(const p of points.filter(p=>p.type===type)){
+     const x=left+p.time/maxTime*w,y=top+h-p.rate/maxRate*h;
+     if(type==='jumping')ctx.fillRect(x-3,y-3,6,6);else{ctx.beginPath();ctx.arc(x,y,3,0,2*Math.PI);ctx.fill();}
+   }
+   for(const e of events.filter(e=>e.type===type))ctx.fillRect(left+e.time/maxTime*w,top+h-4,1.5,4);
+ }
  $('chart-summary').textContent=points.length?`${events.length} detected swings. Latest confirmed interval: ${points.at(-1).gap.toFixed(2)} seconds (${points.at(-1).rate.toFixed(0)} swings/min). ${running?'Provisional live estimate.':''}`:'The curve appears after two confirmed swings. Short or unrecognized sequences may not be counted.';
 }
 function report(s){
- const st=statistics(s),supported=['stationary','jumping'].includes(s.type);$('report-type').textContent=TYPES[s.type];$('report').replaceChildren();
+ const st=statistics(s),supported=['auto','stationary','jumping'].includes(s.type);$('report-type').textContent=TYPES[s.type];$('report').replaceChildren();
  const rate=v=>v===null?'—':`${v.toFixed(1)} / min`;
- const fields=[['Estimated swings',supported?st.count:'Record only'],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
+ const fields=[['Estimated swings',supported?st.count:'Record only'],['Stationary swings',st.stationaryCount],['Jumping swings',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
  if(s.label){fields.push(['Actual count (labeled range)',s.label.count],['Estimated in labeled range',s.label.predictedBefore??'No detector']);if(s.label.predictedBefore!==null)fields.push(['Count error before calibration',`${s.label.predictedBefore-s.label.count>=0?'+':''}${s.label.predictedBefore-s.label.count}`]);}
  for(const [label,value]of fields){const box=document.createElement('div'),title=document.createElement('span'),strong=document.createElement('strong');title.textContent=label;strong.textContent=value;box.append(title,strong);$('report').append(box);}
- $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. Reports retain the settings used during recording.`;
+ $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. Reports retain the settings used during recording.`;
 }
-function choose(s){selected=s;$('type').value=s.type;$('label-type').value=s.label?.type||s.type;$('actual').value=s.label?.count??'';$('range-start').value=s.label?.range[0]??0;$('range-end').value=s.label?.range[1]??(s.samples.at(-1)?.[0]||s.duration).toFixed(2);$('notes').value=s.label?.notes||'';history();controls();render();$('calibration-status').textContent=s.calibration?.message||(s.label?'Label saved. You can correct it and recalibrate.':'Enter the actual count and type for this practice to calibrate.');}
+function choose(s){selected=s;$('label-type').value=s.label?.type||(s.type==='auto'?((s.detections?.jumping?.length||0)>(s.detections?.stationary?.length||0)?'jumping':'stationary'):s.type);$('actual').value=s.label?.count??'';$('range-start').value=s.label?.range[0]??0;$('range-end').value=s.label?.range[1]??(s.samples.at(-1)?.[0]||s.duration).toFixed(2);$('notes').value=s.label?.notes||'';history();controls();render();$('calibration-status').textContent=s.calibration?.message||(s.label?'Label saved. You can correct it and recalibrate.':'Enter the actual count and type for this practice to calibrate.');}
 async function acquireWake(){try{const lock=await navigator.wakeLock?.request('screen');if(running)wakeLock=lock;else await lock?.release();}catch{}}
 function motion(event){
  if(!running)return;const a=event.acceleration;if(!a||![a.x,a.y,a.z].every(Number.isFinite))return;
@@ -84,13 +96,13 @@ $('start').onclick=async()=>{
  if(running||busy||!ready)return;
  if(sessions.length>=MAX_SESSIONS){$('status').textContent='This browser has 30 saved practices. Export your data, then clear this site’s storage to begin a new collection.';return;}
  if(!window.isSecureContext||!window.DeviceMotionEvent){$('status').textContent='Motion recording needs HTTPS and a supported phone browser.';return;}
- busy=true;controls();
+ busy=true;let recorded=false;controls();
  try{
  if(typeof DeviceMotionEvent.requestPermission==='function'&&await DeviceMotionEvent.requestPermission()!=='granted')throw Error('Motion permission denied. Allow motion access in browser settings.');
  if(document.hidden)throw Error('Return to this page before starting.');
- selected={id:crypto.randomUUID(),startedAt:new Date().toISOString(),type:$('type').value,duration:0,samples:[],detections:{stationary:[],jumping:[]},model:structuredClone(model),label:null};sessions.push(selected);started=performance.now();lastSample=started;lastCheckpoint=started;running=true;
+ selected={id:crypto.randomUUID(),startedAt:new Date().toISOString(),type:'auto',duration:0,samples:[],detections:{stationary:[],jumping:[]},model:structuredClone(model),label:null};sessions.push(selected);started=performance.now();lastSample=started;lastCheckpoint=started;running=true;recorded=true;
  window.addEventListener('devicemotion',motion);acquireWake();choose(selected);$('status').textContent='Recording. Put the phone in the calibrated pocket and find your rhythm.';$('calibration-status').textContent='Finish, then enter the actual count and type to calibrate.';await persist(selected);
- }catch(e){$('status').textContent=e.message;}finally{busy=false;controls();}
+ }catch(e){$('status').textContent=e.message;}finally{if(!recorded||running)busy=false;controls();}
 };
 $('stop').onclick=()=>finish();
 $('history').onchange=()=>{const s=sessions.find(s=>s.id===$('history').value);if(s)choose(s);};
@@ -104,11 +116,11 @@ $('label-form').onsubmit=async event=>{
  try{
  const rangeDetection=await workerCall('detect',{samples:subset,templates,settings:selected.model.settings});
  if(selected.label)(selected.labelHistory??=[]).push(structuredClone(selected.label));
- selected.label={type,count,range:[from,to],notes:$('notes').value.trim(),labeledAt:new Date().toISOString(),predictedBefore:rangeDetection[type]?.length??null};
+ selected.label={type,count,range:[from,to],notes:$('notes').value.trim(),labeledAt:new Date().toISOString(),predictionAlgorithmVersion:VERSION,predictedBefore:rangeDetection[type]?.length??null};
  // Label is durable even if fitting later fails.
  await persist(selected);
  const fit=await workerCall('calibrate',{sessions,templates,settings:model.settings,type});
- if(fit.changed){model={version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>s.label).map(s=>s.id)};}
+ if(fit.changed){model={previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>s.label).map(s=>s.id)};}
  if(selected.calibration)(selected.calibrationHistory??=[]).push(structuredClone(selected.calibration));
  selected.calibration={...fit,settings:structuredClone(fit.settings),modelRevision:model.revision};
  await persist(selected,model);$('calibration-status').textContent=fit.message;history();render();
@@ -125,7 +137,7 @@ function exportFile(){
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});
 }
 $('download').onclick=()=>{download(exportFile());$('export-status').textContent='Download requested. Check your downloads or save dialog.';};
-$('share').onclick=async()=>{const file=exportFile();if(!navigator.canShare?.({files:[file]})){$('export-status').textContent='File sharing is unavailable. Export data, then upload the JSON file in Google Drive.';return;}busy=true;controls();try{await navigator.share({files:[file],title:file.name});$('export-status').textContent='File handed to the selected app. Confirm it saved in Drive.';}catch(e){$('export-status').textContent=e.name==='AbortError'?'Sharing cancelled. Your data is still available.':`Sharing failed: ${e.message}`;}finally{busy=false;controls();}};
+$('share').onclick=async()=>{const file=shareFile(exportFile());if(!navigator.canShare?.({files:[file]})){$('export-status').textContent='File sharing is unavailable. Export data, then upload the JSON file in Google Drive.';return;}busy=true;controls();try{await navigator.share({files:[file],title:file.name});$('export-status').textContent='File handed to the selected app. Confirm it saved in Drive.';}catch(e){$('export-status').textContent=shareFailure(e);}finally{busy=false;controls();}};
 $('client-id').value=window.SUBURI_CONFIG?.googleClientId||'';
 const prepareGoogle=()=>{if($('client-id').value.trim())loadGoogle().catch(()=>{});};$('client-id').onchange=prepareGoogle;prepareGoogle();
 $('drive').onclick=async()=>{
@@ -153,8 +165,8 @@ function validSession(s){
 }
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
- worker=new Worker(new URL('./worker.mjs',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
- try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||data.sessions.length>MAX_SESSIONS||(data.model&&(!validSettings(data.model.settings)||data.model.version!==VERSION)))throw Error('Saved data or model is incompatible');sessions=data.sessions;if(data.model)model=data.model;}
+ worker=new Worker(new URL('./worker.mjs?v=1.1.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
+ try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||data.sessions.length>MAX_SESSIONS)throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;model=nextModel;if(data.model&&data.model.version!==VERSION){await save(db,null,model);$('storage-status').textContent='Detector updated. Your saved practices, labels and previous settings are preserved.';}}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';
  }catch(e){$('status').textContent=`Could not initialize: ${e.message}. Reload while online.`;}

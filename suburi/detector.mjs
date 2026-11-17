@@ -1,7 +1,7 @@
 // Original pocket-motion detector. Templates calibrated from six user-labeled
 // stationary candidates; exact event timing has not been independently verified.
-export const VERSION = 'suburi-1.0.0';
-export const DEFAULTS = Object.freeze({ strong: .75, weak: .55, stationaryScale: 1, jumpHeight: 6, jumpAnchor: 14, jumpScale: 1 });
+export const VERSION = 'suburi-1.1.0';
+export const DEFAULTS = Object.freeze({ strong: .65, weak: .45, stationaryScale: 1.2, jumpHeight: 6, jumpAnchor: 14, jumpScale: 1 });
 const norm = a => Math.sqrt(a.reduce((s,v)=>s+v*v,0));
 export function validSettings(s) {
   return s && ['strong','weak'].every(k=>Number.isFinite(s[k])&&s[k]>=.3&&s[k]<=1) &&
@@ -65,18 +65,60 @@ export function detectPrepared(segments,settings=DEFAULTS) {
   for(const {rows,scores,negativeY} of segments){
     const events=[];
     for(let kind=0;kind<2;kind++)for(const p of peaks(scores[kind],kind?settings.weak:settings.strong,Math.round(60*settings.stationaryScale),.1))events.push({time:rows[p+30][0],kind,score:scores[kind][p]});
-    events.sort((a,b)=>a.time-b.time);let chains=[];
-    for(const e of events){const last=chains.at(-1)?.at(-1);const dt=last?e.time-last.time:0;
-      if(last&&last.kind!==e.kind&&dt>=.95*settings.stationaryScale&&dt<=1.9*settings.stationaryScale)chains.at(-1).push(e);else chains.push([e]);}
-    for(const chain of chains)if(chain.length>=4)stationary.push(...chain);
-    chains=[];
-    for(const p of peaks(negativeY,settings.jumpHeight,Math.round(36*settings.jumpScale),2)){
-      const last=chains.at(-1)?.at(-1);const dt=last===undefined?0:rows[p][0]-rows[last][0];
-      if(last!==undefined&&dt>=.65*settings.jumpScale&&dt<=settings.jumpScale)chains.at(-1).push(p);else chains.push([p]);
+    events.sort((a,b)=>a.time-b.time);
+    // Link compatible matches through distractors rather than resetting a whole
+    // sequence whenever a weak, unrelated local maximum intervenes.
+    const paths=[];
+    for(let i=0;i<events.length;i++){const e=events[i];
+      let best=[i];
+      for(let j=0;j<i;j++){
+        const dt=e.time-events[j].time;
+        if(e.kind!==events[j].kind&&dt>=.8*settings.stationaryScale&&dt<=1.9*settings.stationaryScale){
+          const candidate=[...paths[j],i];
+          const score=p=>p.reduce((sum,k)=>sum+events[k].score,0);
+          if(candidate.length>best.length||(candidate.length===best.length&&score(candidate)>score(best)))best=candidate;
+        }
+      }
+      paths.push(best);
     }
-    for(const chain of chains)if(chain.length>=5&&chain.filter(p=>negativeY[p]>=settings.jumpAnchor).length/chain.length>=.7)jumping.push(...chain.map(p=>({time:rows[p][0],strength:negativeY[p]})));
+    const accepted=[];
+    for(const path of paths.filter(p=>p.length>=4).sort((a,b)=>b.length-a.length)){
+      const start=events[path[0]].time,end=events[path.at(-1)].time;
+      if(accepted.every(p=>end<events[p[0]].time-.8*settings.stationaryScale||start>events[p.at(-1)].time+.8*settings.stationaryScale))accepted.push(path);
+    }
+    for(const path of accepted)stationary.push(...path.map(i=>events[i]));
+    // Preserve competing local peaks until cadence can disambiguate them.
+    // Greedy amplitude pruning at 0.6 s can erase a real repetition when a
+    // neighboring pulse shifts slightly after resampling.
+    const candidates=peaks(negativeY,settings.jumpHeight,Math.round(18*settings.jumpScale),2);
+    const jumpPaths=[];
+    for(let i=0;i<candidates.length;i++){
+      let best=[i];
+      for(let j=0;j<i;j++){
+        const dt=rows[candidates[i]][0]-rows[candidates[j]][0];
+        if(dt>=.65*settings.jumpScale&&dt<=settings.jumpScale){
+          const path=[...jumpPaths[j],i];
+          const strength=p=>p.reduce((sum,k)=>sum+Math.min(negativeY[candidates[k]],settings.jumpAnchor*2),0);
+          if(path.length>best.length||(path.length===best.length&&strength(path)>strength(best)))best=path;
+        }
+      }
+      jumpPaths.push(best);
+    }
+    const jumpAccepted=[];
+    for(const path of jumpPaths.filter(p=>p.length>=5&&p.filter(k=>negativeY[candidates[k]]>=settings.jumpAnchor).length/p.length>=.7).sort((a,b)=>b.length-a.length)){
+      const start=rows[candidates[path[0]]][0],end=rows[candidates[path.at(-1)]][0];
+      if(jumpAccepted.every(p=>end<rows[candidates[p[0]]][0]-.65*settings.jumpScale||start>rows[candidates[p.at(-1)]][0]+.65*settings.jumpScale))jumpAccepted.push(path);
+    }
+    for(const path of jumpAccepted)jumping.push(...path.map(k=>({time:rows[candidates[k]][0],strength:negativeY[candidates[k]]})));
+
   }
-  return { stationary, jumping };
+  // Jump sequences take precedence in their own time region. Never count the
+  // same motion twice or draw a stationary trace through a jumping block.
+  const filtered=stationary.filter(e=>!jumping.some(j=>Math.abs(j.time-e.time)<.6));
+  filtered.sort((a,b)=>a.time-b.time);jumping.sort((a,b)=>a.time-b.time);
+  const events=[...filtered.map(e=>({...e,type:'stationary'})),...jumping.map(e=>({...e,type:'jumping'}))].sort((a,b)=>a.time-b.time);
+  return { stationary:filtered, jumping, events };
+
 }
 export const detect=(samples,templates,settings=DEFAULTS,range=null)=>detectPrepared(prepare(samples,templates,range),settings);
 
@@ -87,8 +129,8 @@ export function calibrate(sessions,templates,current,type) {
   const usable=sessions.filter(s=>s.label && (s.label.type===type||s.label.type==='other'||(s.label.type!==type&&['stationary','jumping'].includes(s.label.type))));
   const positive=usable.filter(s=>s.label.type===type);
   if(!positive.length)return {settings:current,changed:false,message:'No labeled sessions for this type.'};
-  const prepared=usable.map(s=>({data:prepare(s.samples,templates,s.label.range),expected:s.label.type===type?s.label.count:0}));
-  const loss=settings=>prepared.reduce((sum,p)=>sum+Math.abs(detectPrepared(p.data,settings)[type].length-p.expected),0);
+  const prepared=usable.map(s=>({data:prepare(s.samples,templates,s.label.range),expected:{stationary:s.label.type==='stationary'?s.label.count:0,jumping:s.label.type==='jumping'?s.label.count:0}}));
+  const loss=settings=>prepared.reduce((sum,p)=>{const detected=detectPrepared(p.data,settings);return sum+Math.abs(detected.stationary.length-p.expected.stationary)+Math.abs(detected.jumping.length-p.expected.jumping);},0);
   const before=loss(current);let best={...current},bestLoss=before;
   const candidates=[];
   if(type==='stationary')for(const strong of [.65,.7,.75,.8,.85])for(const weak of [.45,.5,.55,.6,.65])for(const scale of [.8,1,1.2,1.4])candidates.push({...current,strong,weak,stationaryScale:scale});
@@ -98,4 +140,13 @@ export function calibrate(sessions,templates,current,type) {
   return {settings:best,changed:bestLoss<before,before,after:bestLoss,sessions:usable.length,
     message:bestLoss<before?`Settings updated: total count error on ${usable.length} saved labeled sessions fell from ${before} to ${bestLoss}. This is calibration, not an independent accuracy test.`:
     `Label saved. Current settings retained (total count error ${before} across ${usable.length} labeled sessions). More recordings may help; counts are never forced to match labels.`};
+}
+
+export function migrateModel(saved){
+ if(!saved)return {version:VERSION,revision:0,settings:{...DEFAULTS}};
+ if(!validSettings(saved.settings)||!Number.isInteger(saved.revision)||saved.revision<0)throw Error('Saved model is invalid');
+ if(saved.version===VERSION)return saved;
+ if(saved.version!=='suburi-1.0.0')throw Error('Saved model version is not supported');
+ return {version:VERSION,revision:saved.revision+1,settings:{...DEFAULTS},updatedAt:new Date().toISOString(),
+   previousModel:saved,migration:'Updated stationary sequence detector and automatic type recognition. Previous model and original session reports preserved.'};
 }
