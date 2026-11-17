@@ -3,6 +3,7 @@
 Small phone-friendly web apps built with plain HTML, CSS, and JavaScript. No build step or dependencies.
 
 - `/`: home page with an icon and link for every app.
+- `/suburi/`: pocket-motion kendo counter with live cadence, practice reports, labeled calibration, and JSON / Google Drive export. See [setup and limitations](suburi/README.md).
 - `/accelerometer/`: record three-axis acceleration with start/stop controls, timestamped CSV download, and Google Drive export. See [setup and usage](accelerometer/README.md).
 - `/flashlight/`: screen flashlight with color and brightness controls.
 - `/tone/`: single sine-wave tone generator with a logarithmic 1–30,000 Hz frequency slider, exact integer Hz entry, and a 0–100% volume slider.
