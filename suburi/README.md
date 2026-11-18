@@ -48,23 +48,15 @@ Exports use JSON schema `phoneapps.suburi.dataset`, version 1:
 - optional label: actual type/count, time range, pocket notes, label time, predicted count before fitting;
 - optional calibration summary: settings selected, fit errors, whether changed and new model revision.
 
-Choose all saved sessions or just the selected session. **Share** opens the native share sheet with the complete JSON data attached as a `text/plain` file named `*.json.txt` for phone compatibility. Choose your email app, Drive, or another destination and complete sending or saving there. The app confirms handoff, not delivery. If sharing is denied or unavailable, Export data still downloads the JSON for manual attachment. Direct Drive upload remains available. Exports do not automatically update the app. No import interface is included; keep exports for analysis/backups.
+Choose all saved sessions or just the selected session. **Share** opens the native share sheet with the complete JSON data attached as a `text/plain` file named `*.json.txt` for phone compatibility. Choose your email app, Drive, or another destination and complete sending or saving there. The app confirms handoff, not delivery. If sharing is denied or unavailable, Export data still downloads the JSON for manual attachment. Direct Google Drive upload is not included; use Share or Export data. Exports do not automatically update the app. No import interface is included; keep exports for analysis/backups.
 
 A storage error is shown explicitly; recordings remain exportable in memory. Corrupt/incompatible saved history is not overwritten. Data does not sync across browsers/devices, and clearing site data removes local history and calibration. Keep backups. No server receives sensor data except when the user explicitly exports to a chosen app/Drive account.
 
-## Direct Google Drive setup
-
-1. Enable Google Drive API in a Google Cloud project.
-2. Configure consent / test users and the `https://www.googleapis.com/auth/drive.file` scope.
-3. Create a **Web application** OAuth client, authorizing the exact hosting origin (for example `https://jinwar.github.io`, not a path; optionally `http://localhost:8000`).
-4. Put the public client ID in `suburi/config.js`, or enter it under Direct Drive setup. No client secret belongs in browser code. The entered ID is not persisted.
-5. Tap Upload to Google Drive. If sign-in is still loading, a second tap preserves the browser's popup user gesture. Each upload creates a new JSON file in My Drive and returns a link. Access tokens stay in memory. Failed uploads leave local data untouched; check My Drive before retrying an interrupted request to avoid duplicates.
-
-Native sharing requires no OAuth setup. Direct upload needs internet and a configured client. The app currently requires the static files to load online; the manifest does not promise offline availability.
+The app currently requires the static files to load online; the manifest does not promise offline availability.
 
 ## Validation
 
-`node --test tests/suburi.test.mjs` checks continuous-segment preprocessing, rejection of noise and invalid data, repetition chains, bounded calibration improvement and cadence/report calculations. Browser tests: install Playwright outside the repository, serve on port 8000, then run `PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node --test tests/suburi.browser.mjs`; `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. Browser tests simulate motion and mock Drive; actual iOS/Android permission, pocket motion, native file sharing and live Google OAuth need on-device testing.
+`node --test tests/suburi.test.mjs` checks continuous-segment preprocessing, rejection of noise and invalid data, repetition chains, bounded calibration improvement and cadence/report calculations. Browser tests: install Playwright outside the repository, serve on port 8000, then run `PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node --test tests/suburi.browser.mjs`; `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. Browser tests simulate motion and native sharing; actual iOS/Android permission, pocket motion, native file sharing need on-device testing.
 
 The implementation reuses workflow ideas from the repo's jump-rope app: foreground-only sensing, missing-sensor timeout, wake locks, checkpointing and duplicate suppression. Its gravity projection is not appropriate for these linear-acceleration recordings. External research references informing the analysis are [RecoFit](https://www.microsoft.com/en-us/research/publication/recofit-using-wearable-sensor-find-recognize-count-repetitive-exercises/) and [tslearn](https://github.com/tslearn-team/tslearn) for possible future DTW comparisons. No external application code was copied.
 
@@ -78,7 +70,7 @@ A synthetic concatenation of the two new sessions with a two-second rest initial
 
 Saved v1.0 histories and labels survive the upgrade. New sessions use revised v1.1 defaults; the previous calibrated model is archived inside the new model and original session snapshots/reports stay unchanged. Unsupported future model versions fail safely without overwriting storage. Cache-versioned app and worker imports load the revised detector.
 
-The native share change addresses a plausible JSON attachment restriction behind the reported “permission denied” error. The exact phone/browser cause is not established. Automated tests cover text attachment contents, mocked permission denial, download availability, and unchanged direct Drive JSON upload. Actual phone sharing still needs confirmation.
+The native share change addresses a plausible JSON attachment restriction behind the reported “permission denied” error. The exact phone/browser cause is not established. Automated tests cover text attachment contents, mocked permission denial, download availability, and export availability. Actual phone sharing still needs confirmation.
 
 ## Activity terminology
 

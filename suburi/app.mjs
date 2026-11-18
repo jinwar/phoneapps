@@ -2,7 +2,7 @@ import {drawCalibration} from './calibration-chart.mjs?v=1.1.5';
 import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.1';
 import {openDatabase,readAll,save} from './storage.mjs';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
-import {loadGoogle,download,upload,shareFile,shareFailure} from './export.mjs?v=1.1.2';
+import {download,shareFile,shareFailure} from './export.mjs?v=1.1.6';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000,MAX_SESSIONS=30;
 let plotData=null,plotSession=null,plotRequest=0;
@@ -15,7 +15,7 @@ function controls(){
  $('history').disabled=running||busy;
  $('calibrate').disabled=!selected||running||busy||!selected.samples.length;
  for(const id of ['label-type','actual','range-start','range-end','notes'])$(id).disabled=running||busy||!selected;
- for(const id of ['download','share','drive'])$(id).disabled=running||busy||!sessions.length;
+ for(const id of ['download','share'])$(id).disabled=running||busy||!sessions.length;
  $('badge').textContent=running?'Recording':busy?'Processing':'Ready';
  $('model-info').textContent=`Model ${model.revision} · ${VERSION}`;
 }
@@ -172,15 +172,6 @@ function exportFile(){
 }
 $('download').onclick=()=>{download(exportFile());$('export-status').textContent='Download requested. Check your downloads or save dialog.';};
 $('share').onclick=async()=>{const file=shareFile(exportFile());if(!navigator.canShare?.({files:[file]})){$('export-status').textContent='File sharing is unavailable. Export data, then attach the saved file in your email or Drive app.';return;}busy=true;controls();try{await navigator.share({files:[file],title:file.name});$('export-status').textContent='File handed to the selected app. Complete sending or saving there.';}catch(e){$('export-status').textContent=shareFailure(e);}finally{busy=false;controls();}};
-$('client-id').value=window.SUBURI_CONFIG?.googleClientId||'';
-const prepareGoogle=()=>{if($('client-id').value.trim())loadGoogle().catch(()=>{});};$('client-id').onchange=prepareGoogle;prepareGoogle();
-$('drive').onclick=async()=>{
- const client=$('client-id').value.trim();if(!client.endsWith('.apps.googleusercontent.com')){document.querySelector('details').open=true;$('client-id').focus();$('export-status').textContent='Enter a Google OAuth web client ID, or export the file and upload it in Drive.';return;}
- busy=true;controls();$('drive-link').hidden=true;
- try{if(!window.google?.accounts?.oauth2){$('export-status').textContent='Loading Google sign-in…';await loadGoogle();$('export-status').textContent='Sign-in is ready. Tap Upload to Google Drive again.';return;}
- $('export-status').textContent='Sign in to upload the export to My Drive…';const url=await upload(exportFile(),client);$('drive-link').href=url;$('drive-link').hidden=false;$('export-status').textContent='Data uploaded to My Drive.';
- }catch(e){$('export-status').textContent=`${e.message} Data remains available. If the connection was interrupted, check My Drive before retrying.`;}finally{busy=false;controls();}
-};
 document.addEventListener('visibilitychange',()=>{if(document.hidden)finish('Stopped because the page was hidden. Your practice is preserved.');});
 window.addEventListener('pagehide',()=>{if(running){selected.duration=(performance.now()-started)/1000;persist(selected);}});
 window.addEventListener('beforeunload',e=>{if(running||unsaved){e.preventDefault();e.returnValue='';}});

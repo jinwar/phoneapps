@@ -60,7 +60,7 @@ try{
   await next.page.waitForFunction(()=>document.getElementById('status').textContent.includes('No valid linear'));
   assert.equal(await next.page.locator('#download').isEnabled(),true);await next.context.close();
  });
- await test('hidden page stops, forward labels do not pretend to train a detector, Drive uploads correct JSON',async()=>{
+ await test('hidden page stops and unsupported labels preserve export without direct Drive controls',async()=>{
   const {context,page}=await setup();await page.click('#start');await samples(page);
   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
   await page.waitForFunction(()=>!document.getElementById('start').disabled);
@@ -68,12 +68,8 @@ try{
   await page.selectOption('#label-type','forward');
   await page.fill('#actual','10');await page.click('#calibrate');await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);
   assert.match(await page.textContent('#calibration-status'),/does not yet have/);assert.match(await page.textContent('#model-info'),/Model 0/);
-  await page.evaluate(()=>{window.google={accounts:{oauth2:{initTokenClient(opts){window.scope=opts.scope;return {requestAccessToken(){opts.callback({access_token:'test'});}};}}}};});
-  await page.click('summary');await page.fill('#client-id','test.apps.googleusercontent.com');let calls=0;
-  await page.route('https://www.googleapis.com/upload/**',async route=>{calls++;assert.equal(route.request().headers().authorization,'Bearer test');assert.match(route.request().postData(),/phoneapps.suburi.dataset/);assert.match(route.request().postData(),/linear_x/);await route.fulfill({status:calls===1?200:403,contentType:'application/json',body:calls===1?'\{"id":"test-suburi"\}':'{}'});});
-  await page.click('#drive');await page.locator('#drive-link').waitFor({state:'visible'});assert.equal(await page.locator('#drive-link').getAttribute('href'),'https://drive.google.com/file/d/test-suburi/view');
-  assert.equal(await page.evaluate(()=>window.scope),'https://www.googleapis.com/auth/drive.file');
-  await page.click('#drive');await page.waitForFunction(()=>document.getElementById('export-status').textContent.includes('403'));assert.equal(await page.locator('#download').isEnabled(),true);await context.close();
+  assert.equal(await page.locator('#drive,#drive-link,#client-id,script[src="config.js"]').count(),0);
+  assert.equal(await page.locator('#download').isEnabled(),true);assert.equal(await page.locator('#share').isEnabled(),true);await context.close();
  });
  await test('bad time range is rejected and storage failures keep export available',async()=>{
   const {context,page}=await setup();await page.click('#start');await samples(page);await finish(page);
