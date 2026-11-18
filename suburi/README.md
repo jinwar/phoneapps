@@ -10,6 +10,8 @@ Forward-moving swings and Walking / other are post-recording calibration labels.
 
 The live plot shows **cadence in swings/minute**, not shinai velocity in m/s. A pocket phone measures body motion, not sword movement. It cannot confirm whether the user is holding a sword or assess technique. An interval contributes to the curve only when it is positive and at most four seconds; longer pauses break the curve. Green circles show stationary swings and blue squares show jumping swings. Lines and cadence intervals do not cross type changes. The report includes total, stationary and jumping counts. The current cadence is the average of the latest three valid intervals and becomes unavailable after four seconds without a detected event.
 
+The Practice history list above Saved practices shows each past session’s local date/time, duration, and estimated suburi count, newest first. Interrupted sessions are marked; the active recording appears after it ends.
+
 Reports contain estimated count, full session duration, mean/median/peak interval cadence, whole-session count per minute, inter-repetition interval coefficient of variation, and sensor sample rate. Lower interval variation means more even timing, not better technique. Actual count, estimate and count error are shown for the labeled range when one exists. Reports keep the original model and original detections; calibration does not rewrite old results.
 
 ## Detector

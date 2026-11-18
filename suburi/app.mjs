@@ -22,6 +22,23 @@ function history(){
  if(!sessions.length){const o=new Option('No saved practices','');$('history').append(o);}
  for(const s of [...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))){const o=new Option(`${new Date(s.startedAt).toLocaleString()} · ${TYPES[s.type]}${s.label?' · labeled':''}${s.endedAt?'':' · interrupted'}`,s.id);$('history').append(o);}
  if(selected)$('history').value=selected.id;
+ const list=$('practice-history');list.replaceChildren();
+ const past=sessions.filter(s=>!(running&&s.id===selected?.id)).sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
+ if(!past.length){const empty=document.createElement('li');empty.className='hint';empty.textContent='Your completed practices will appear here.';list.append(empty);}
+ for(const s of past){
+   const row=document.createElement('li');row.className='practice-row';
+   const when=document.createElement('time');when.dateTime=s.startedAt;
+   const date=new Date(s.startedAt),day=document.createElement('strong'),clock=document.createElement('span');
+   day.textContent=date.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+   clock.textContent=date.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});when.append(day,clock);
+   const duration=document.createElement('div'),durationLabel=document.createElement('span'),durationValue=document.createElement('strong');
+   durationLabel.textContent='Duration';durationValue.textContent=fmt(s.duration);duration.append(durationLabel,durationValue);
+   const count=document.createElement('div'),countLabel=document.createElement('span'),countValue=document.createElement('strong');
+   countLabel.textContent='Suburi';countValue.textContent=['auto','stationary','jumping'].includes(s.type)?sessionEvents(s).length.toLocaleString():'—';count.append(countLabel,countValue);
+   row.append(when,duration,count);
+   if(!s.endedAt){const note=document.createElement('small');note.textContent='Interrupted / recovered';row.append(note);}
+   list.append(row);
+ }
 }
 async function persist(session,updatedModel=null){
  unsaved=true;
