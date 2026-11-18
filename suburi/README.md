@@ -107,3 +107,25 @@ Use **Add another label** to enter an additional activity/count/time range in th
 Calibration evaluates all supported labeled ranges across retained practices, treating each range independently and including the other detected type in its error calculation. Saving a label tunes that type's parameters and recalculates the whole selected practice plus estimates for every labeled range. All labeled regions are shaded on the plots. Removing a label does not undo learned settings; save a remaining label to fit again. Removing the last label makes the recording subject to the latest-five uncalibrated retention rule.
 
 Legacy `label` objects are read as one-element lists. New and edited practices use `labels`; exports use schema version 2 and always emit a `labels` array, including for older practices. Existing settings survive the detector metadata upgrade. Calibration summaries distinguish unique `sessions` from labeled `ranges`. Prior label edits/removals remain in `labelHistory` for analysis.
+
+## Experimental hayasuburi template comparison
+
+The calibration panel includes a **Hayasuburi template trial** plot and counts, calculated in the worker when reviewing a saved practice. It is a comparison only: official counts, lifetime history, calibration settings and exports continue to use the current detector. The trial threshold is fixed at 0.50; saving a calibration label does not tune or retrain this experimental template. Explicit hayasuburi labels show actual count alongside both detectors' events within that range.
+
+`hayasuburi-template.mjs` contains the normalized mean of 16 interior 49-sample XYZ windows (approximately 0.8 seconds), centered on the original detector's candidate events in the original 20-hayasuburi recording; the first and last two events were excluded. Each window is axis-mean-centered and normalized before averaging, and the mean is normalized again. Thus training event alignment is a bootstrap from the old detector, not independently annotated strike times. Only the normalized template is published, not source recordings.
+
+`hayasuburi-trial.mjs` applies the existing 60 Hz / 8 Hz preprocessing, computes normalized three-axis cross-correlation, and selects peaks above 0.50 with prominence 0.10 and spacing at least 0.60 seconds. A centered-window RMS floor of 2 m/s² prevents normalization from amplifying nearly stationary sensor noise. Only chains of at least five matches spaced 0.65–1.00 seconds are counted. Sensor gaps split chains. This is template-based event generation, independent of current peak-detector events at inference time; it remains dependent on pocket orientation and pace.
+
+Replay results (hayasuburi counts):
+
+| Recording | Current peak detector | Template trial | Ground truth |
+| --- | ---: | ---: | --- |
+| Original walking | 0 | 0 | No swings |
+| Original forward/backward | 0 | 0 | 20 forward/backward |
+| Original hayasuburi | 20 | 20 | 20 hayasuburi + 2 later distinct forward swings |
+| Later labeled hayasuburi | 40 | 40 | 40 hayasuburi |
+| Later forward/backward | 0 | 0 | 30 forward/backward |
+| Short mixed practice | 11 | 10 | No activity/count labels |
+| Latest long practice | 100 | 99 | Only first 0–90 s labeled: 40 forward/backward |
+
+The template-only trial has not demonstrated an accuracy improvement over the existing detector. The 20 recording supplied the template; the 40 recording was not used to build it, but was inspected while choosing the threshold, so neither is an independent final test. Mixed-recording differences cannot be resolved without explicit labels or event timing. The latest record's first labeled 0–90 s has zero template hayasuburi matches. Before changing the default, collect new labeled mixed/negative sessions and compare event timing as well as totals. Validate template mechanics with `node --test tests/hayasuburi-template.test.mjs`.

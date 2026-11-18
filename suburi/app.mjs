@@ -1,7 +1,7 @@
 import {labelsFor,overlaps,validLabels} from './labels.mjs?v=1.3.0';
 let editingLabel=-1;
 import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.3.0';
-import {drawCalibration} from './calibration-chart.mjs?v=1.3.0';
+import {drawCalibration} from './calibration-chart.mjs?v=1.4.0';
 import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.3.0';
 import {openDatabase,readAll,save} from './storage.mjs?v=1.3.0';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
@@ -105,7 +105,7 @@ async function refreshCalibration(s){
  const request=++plotRequest;plotData=null;plotSession=null;$('calibration-plots').hidden=true;
  const effect=s.calibration?.comparison;
  $('calibration-effect').textContent=effect?`Latest calibration — labeled ${effect.range[0]}–${effect.range[1]} s: ${effect.beforeRange??'—'} → ${effect.afterRange??'—'} ${TYPES[effect.type]} (actual ${effect.actual}).\nWhole practice: forward/backward ${effect.beforeStationary} → ${effect.afterStationary}; hayasuburi ${effect.beforeJumping} → ${effect.afterJumping}. Counts, report, history and cadence chart now use the recalculated results.`:'';
- try{const data=await workerCall('prepare',{samples:s.samples,templates});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data,s);}
+ try{const data=await workerCall('prepare',{samples:s.samples,templates});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data.segments,s,data.trial);}
  catch(e){if(request===plotRequest)$('threshold-summary').textContent=`Plot unavailable: ${e.message}`;}
 }
 function labelForm(index=-1){
@@ -206,7 +206,7 @@ $('share').onclick=async()=>{const file=shareFile(exportFile());if(!navigator.ca
 document.addEventListener('visibilitychange',()=>{if(document.hidden)finish('Stopped because the page was hidden. Your practice is preserved.');});
 window.addEventListener('pagehide',()=>{if(running){selected.duration=(performance.now()-started)/1000;persist(selected);}});
 window.addEventListener('beforeunload',e=>{if(running||unsaved){e.preventDefault();e.returnValue='';}});
-window.addEventListener('resize',()=>{render();if(plotData&&plotSession&&!running)drawCalibration(plotData,plotSession);});
+window.addEventListener('resize',()=>{render();if(plotData&&plotSession&&!running)drawCalibration(plotData.segments,plotSession,plotData.trial);});
 setInterval(()=>{if(running&&performance.now()-lastSample>5000)finish('No valid linear acceleration for five seconds. Check motion permission and device support.');render();},250);
 setInterval(async()=>{
  if(!running||livePending)return;const s=selected;livePending=true;
@@ -221,7 +221,7 @@ function validSession(s){
 }
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
- worker=new Worker(new URL('./worker.mjs?v=1.3.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
+ worker=new Worker(new URL('./worker.mjs?v=1.4.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
  try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||!validSummaries(data.summaries))throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;summaries=data.summaries;model=nextModel;const retained=await save(db,null,model);sessions=retained.sessions;summaries=retained.summaries;}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';

@@ -31,6 +31,8 @@ try{
   assert.match(await page.textContent('#practice-history'),/10/);
   await page.waitForFunction(()=>!document.getElementById('calibration-plots').hidden);
   assert.match(await page.textContent('#threshold-summary'),/14 → 10/);
+  assert.match(await page.textContent('#hayasuburi-template-summary'),/vs current 10 hayasuburi/);
+  assert.equal(await page.locator('#hayasuburi-template-chart').isVisible(),true);
   assert.equal(await page.evaluate(()=>document.getElementById('practice-history-title').compareDocumentPosition(document.getElementById('calibration-panel')) & Node.DOCUMENT_POSITION_FOLLOWING),4);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.screenshot({path:'/tmp/suburi-calibration.png',fullPage:true});
