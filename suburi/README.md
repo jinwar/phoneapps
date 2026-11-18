@@ -79,3 +79,7 @@ A synthetic concatenation of the two new sessions with a two-second rest initial
 Saved v1.0 histories and labels survive the upgrade. New sessions use revised v1.1 defaults; the previous calibrated model is archived inside the new model and original session snapshots/reports stay unchanged. Unsupported future model versions fail safely without overwriting storage. Cache-versioned app and worker imports load the revised detector.
 
 The native share change addresses a plausible JSON attachment restriction behind the reported “permission denied” error. The exact phone/browser cause is not established. Automated tests cover text attachment contents, mocked permission denial, download availability, and unchanged direct Drive JSON upload. Actual phone sharing still needs confirmation.
+
+## Activity terminology
+
+The app calls forward/backward practice **Forward/backward suburi** (zenshin-kōtai suburi) and repeated fast hopping practice **Hayasuburi**. Earlier UI versions called these Stationary and Jumping. Saved records, calibration labels, detector settings, and exports retain the internal keys `stationary` and `jumping` for compatibility; the algorithm is unchanged. Historical analysis above uses those original names.

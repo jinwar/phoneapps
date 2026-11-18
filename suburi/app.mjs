@@ -2,7 +2,7 @@ import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.
 import {openDatabase,readAll,save} from './storage.mjs';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.0';
 import {loadGoogle,download,upload,shareFile,shareFailure} from './export.mjs?v=1.1.0';
-const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Stationary',jumping:'Jumping',forward:'Forward-moving',other:'Walking / other'};
+const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000,MAX_SESSIONS=30;
 let db,templates,model={version:VERSION,revision:0,settings:{...DEFAULTS}},sessions=[],selected=null,running=false,busy=false,ready=false;
 let started=0,lastSample=0,worker,sequence=0,wakeLock=null,storageHealthy=true,unsaved=false,livePending=false,lastCheckpoint=0;
@@ -52,7 +52,7 @@ function render(){
  const duration=running?(performance.now()-started)/1000:(s?.duration||0);
  $('count').textContent=s&&!supported?'—':events.length;$('count-label').textContent=s&&!supported?'data collection only':'estimated swings';
  $('stationary-count').textContent=events.filter(e=>e.type==='stationary').length;$('jumping-count').textContent=events.filter(e=>e.type==='jumping').length;
- const last=events.at(-1);$('activity').textContent=running?(last&&duration-last.time<=4?`Detected: ${TYPES[last.type]} suburi`:'Listening for a repeating swing pattern…'):'Stationary and jumping swings are detected automatically.';
+ const last=events.at(-1);$('activity').textContent=running?(last&&duration-last.time<=4?`Detected: ${TYPES[last.type]}`:'Listening for a repeating swing pattern…'):'Forward/backward suburi and hayasuburi are detected automatically.';
  $('duration').textContent=fmt(duration);$('samples').textContent=(s?.samples.length||0).toLocaleString();
  const rates=cadence(events),recent=rates.slice(-3);const fresh=recent.length&&duration-recent.at(-1).time<=4;
  $('pace').textContent=fresh?`${Math.round(recent.reduce((x,p)=>x+p.rate,0)/recent.length)} / min`:'—';
@@ -86,7 +86,7 @@ function draw(points,events,duration){
 function report(s){
  const st=statistics(s),supported=['auto','stationary','jumping'].includes(s.type);$('report-type').textContent=TYPES[s.type];$('report').replaceChildren();
  const rate=v=>v===null?'—':`${v.toFixed(1)} / min`;
- const fields=[['Estimated swings',supported?st.count:'Record only'],['Stationary swings',st.stationaryCount],['Jumping swings',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
+ const fields=[['Estimated swings',supported?st.count:'Record only'],['Forward/backward suburi',st.stationaryCount],['Hayasuburi',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
  if(s.label){fields.push(['Actual count (labeled range)',s.label.count],['Estimated in labeled range',s.label.predictedBefore??'No detector']);if(s.label.predictedBefore!==null)fields.push(['Count error before calibration',`${s.label.predictedBefore-s.label.count>=0?'+':''}${s.label.predictedBefore-s.label.count}`]);}
  for(const [label,value]of fields){const box=document.createElement('div'),title=document.createElement('span'),strong=document.createElement('strong');title.textContent=label;strong.textContent=value;box.append(title,strong);$('report').append(box);}
  $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. Reports retain the settings used during recording.`;
