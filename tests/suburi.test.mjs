@@ -49,13 +49,14 @@ test('model upgrade preserves earlier calibration metadata and rejects unknown v
  const updated=migrateModel(old);assert.equal(updated.version,VERSION);assert.equal(updated.revision,2);assert.deepEqual(updated.previousModel,old);assert.equal(updated.settings.weak,.45);
  assert.equal(migrateModel(updated),updated);assert.throws(()=>migrateModel({...old,version:'unknown'}));
 });
-test('email draft addresses calibration recipient and requires the exported attachment',async()=>{
- const {calibrationEmail}=await import('../suburi/export.mjs');
- const url=new URL(calibrationEmail({name:'calibration & notes.json'}));
- assert.equal(url.protocol,'mailto:');assert.equal(url.pathname,'jinwar@gmail.com');
- assert.match(url.searchParams.get('body'),/calibration & notes.json/);
- assert.match(url.searchParams.get('body'),/attach the downloaded file/);
+test('native share uses byte-identical JSON inside a shareable text attachment',async()=>{
+ const {shareFile,shareFailure}=await import('../suburi/export.mjs');
+ const source=new File(['{"schema":"phoneapps.suburi.dataset","sessions":[]}'],'data.json',{type:'application/json'});
+ const text=shareFile(source);assert.equal(text.name,'data.json.txt');assert.equal(text.type,'text/plain');assert.equal(await text.text(),await source.text());
+ assert.match(shareFailure({name:'NotAllowedError',message:'Permission denied'}),/Export data/);
+ assert.match(shareFailure({name:'AbortError',message:'Cancelled'}),/cancelled/);
 });
+
 test('calibration update preserves existing v1.1 settings',async()=>{
  const {migrateModel,VERSION}=await import('../suburi/detector.mjs');
  const old={version:'suburi-1.1.0',revision:2,settings:{...DEFAULTS,strong:.7}};

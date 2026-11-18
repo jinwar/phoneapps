@@ -1,7 +1,7 @@
 import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.1';
 import {openDatabase,readAll,save} from './storage.mjs';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
-import {loadGoogle,download,upload,calibrationEmail} from './export.mjs?v=1.1.1';
+import {loadGoogle,download,upload,shareFile,shareFailure} from './export.mjs?v=1.1.2';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000,MAX_SESSIONS=30;
 let db,templates,model={version:VERSION,revision:0,settings:{...DEFAULTS}},sessions=[],selected=null,running=false,busy=false,ready=false;
@@ -13,7 +13,7 @@ function controls(){
  $('history').disabled=running||busy;
  $('calibrate').disabled=!selected||running||busy||!selected.samples.length;
  for(const id of ['label-type','actual','range-start','range-end','notes'])$(id).disabled=running||busy||!selected;
- for(const id of ['download','email','drive'])$(id).disabled=running||busy||!sessions.length;
+ for(const id of ['download','share','drive'])$(id).disabled=running||busy||!sessions.length;
  $('badge').textContent=running?'Recording':busy?'Processing':'Ready';
  $('model-info').textContent=`Model ${model.revision} · ${VERSION}`;
 }
@@ -154,11 +154,7 @@ function exportFile(){
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});
 }
 $('download').onclick=()=>{download(exportFile());$('export-status').textContent='Download requested. Check your downloads or save dialog.';};
-$('email').onclick=()=>{
- const file=exportFile();download(file);
- $('email-link').href=calibrationEmail(file);$('email-link').hidden=false;
- $('export-status').textContent=`Download requested: ${file.name}. Save the file, then open the email draft below and attach it. The draft is addressed to jinwar@gmail.com; nothing has been sent yet.`;
-};
+$('share').onclick=async()=>{const file=shareFile(exportFile());if(!navigator.canShare?.({files:[file]})){$('export-status').textContent='File sharing is unavailable. Export data, then attach the saved file in your email or Drive app.';return;}busy=true;controls();try{await navigator.share({files:[file],title:file.name});$('export-status').textContent='File handed to the selected app. Complete sending or saving there.';}catch(e){$('export-status').textContent=shareFailure(e);}finally{busy=false;controls();}};
 $('client-id').value=window.SUBURI_CONFIG?.googleClientId||'';
 const prepareGoogle=()=>{if($('client-id').value.trim())loadGoogle().catch(()=>{});};$('client-id').onchange=prepareGoogle;prepareGoogle();
 $('drive').onclick=async()=>{
