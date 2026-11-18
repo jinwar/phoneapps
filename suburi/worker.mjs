@@ -1,6 +1,6 @@
-import {templateTrial} from './hayasuburi-trial.mjs?v=1.5.0';
-import {detect,calibrate,prepare} from './detector.mjs?v=1.5.0';
-import {learnTemplates} from './template-learning.mjs?v=1.5.0';
+import {templateTrial} from './hayasuburi-trial.mjs?v=1.7.0';
+import {detect,calibrate,prepare} from './detector.mjs?v=1.7.0';
+import {learnTemplates} from './template-learning.mjs?v=1.7.0';
 self.onmessage=({data:m})=>{try{
  const templates=m.model?.stationaryTemplates||m.templates;let result;
  if(m.action==='prepare')result={segments:prepare(m.samples,templates),trial:templateTrial(m.samples,m.model?.hayasuburiTemplate)};

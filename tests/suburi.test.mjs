@@ -105,3 +105,14 @@ test('user counts replace both detector types in labeled ranges without fabricat
  session.labels=[{type:'forward',count:8,range:[0,15]}];assert.equal(practiceCounts(session).count,10);
  delete session.labels;session.label={type:'stationary',count:40,range:[0,20]};assert.equal(practiceCounts(session).count,40);
 });
+
+test('repeated directions count without alternating and reject weak or irregular runs',async()=>{
+ const {detectPrepared}=await import('../suburi/detector.mjs');
+ const rows=Array.from({length:1800},(_,i)=>[i/60,0,0,0]);
+ const make=(kinds,score=.9,times=kinds.map((_,i)=>2+i*1.1))=>{const scores=[Array(1740).fill(0),Array(1740).fill(0)];kinds.forEach((kind,i)=>scores[kind][Math.round(times[i]*60)-30]=score);return [{rows,scores,negativeY:rows.map(()=>0)}];};
+ const kinds=Array.from({length:20},(_,i)=>Math.floor(i/2)%2),settings={...DEFAULTS,strong:.5,weak:.45,stationaryScale:1.4};
+ const pairs=detectPrepared(make(kinds),settings);assert.equal(pairs.stationary.length,20);assert.equal(new Set(pairs.stationary.map(e=>e.time)).size,20);
+ assert.equal(detectPrepared(make(Array(8).fill(0)),settings).stationary.length,8);
+ assert.equal(detectPrepared(make(Array(8).fill(0),.56),settings).stationary.length,0);
+ assert.equal(detectPrepared(make(Array(6).fill(0),.9,[2,3,5,6,8,9]),settings).stationary.length,0);
+});

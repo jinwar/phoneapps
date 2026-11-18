@@ -1,7 +1,7 @@
-import {detect,preprocess,normalizeWindow} from './detector.mjs?v=1.5.0';
+import {detect,preprocess,normalizeWindow} from './detector.mjs?v=1.7.0';
 import {validTemplate} from './template-validation.mjs?v=1.5.0';
 import {labelsFor} from './labels.mjs?v=1.3.0';
-import {templateTrial} from './hayasuburi-trial.mjs?v=1.5.0';
+import {templateTrial} from './hayasuburi-trial.mjs?v=1.7.0';
 import defaultHaya from './hayasuburi-template.mjs?v=1.4.0';
 const rowsOf=flat=>Array.from({length:flat.length/3},(_,i)=>flat.slice(i*3,i*3+3));
 function mean(windows){return rowsOf(normalizeWindow(rowsOf(windows[0].map((_,i)=>windows.reduce((s,w)=>s+w[i],0)/windows.length))));}

@@ -1,4 +1,4 @@
-import {preprocess,normalizeWindow} from './detector.mjs?v=1.5.0';
+import {preprocess,normalizeWindow} from './detector.mjs?v=1.7.0';
 import template from './hayasuburi-template.mjs?v=1.4.0';
 export const TRIAL_VERSION='hayasuburi-template-0.1';
 export const TRIAL_THRESHOLD=.5;

@@ -2,7 +2,7 @@ import {validModelTemplates} from './template-validation.mjs?v=1.5.0';
 import {labelsFor} from './labels.mjs?v=1.3.0';
 // Original pocket-motion detector. Templates calibrated from six user-labeled
 // stationary candidates; exact event timing has not been independently verified.
-export const VERSION = 'suburi-1.3.0';
+export const VERSION = 'suburi-1.4.0';
 export const DEFAULTS = Object.freeze({ strong: .65, weak: .45, stationaryScale: 1.2, jumpHeight: 6, jumpAnchor: 14, jumpScale: 1 });
 const norm = a => Math.sqrt(a.reduce((s,v)=>s+v*v,0));
 export function validSettings(s) {
@@ -89,6 +89,31 @@ export function detectPrepared(segments,settings=DEFAULTS) {
       if(accepted.every(p=>end<events[p[0]].time-.8*settings.stationaryScale||start>events[p.at(-1)].time+.8*settings.stationaryScale))accepted.push(path);
     }
     for(const path of accepted)stationary.push(...path.map(i=>events[i]));
+    // Repeated directions need denser candidates and a consistent cadence,
+    // rather than the alternating-template rule used by the legacy path.
+    const repeated=[];
+    for(let kind=0;kind<2;kind++)for(const p of peaks(scores[kind],Math.max(.55,kind?settings.weak:settings.strong),Math.round(30*settings.stationaryScale),.1))repeated.push({time:rows[p+30][0],kind,score:scores[kind][p]});
+    repeated.sort((a,b)=>a.time-b.time);
+    const runs=[];
+    for(let i=0;i<repeated.length;i++)for(let j=i+1;j<repeated.length;j++){
+      const period=repeated[j].time-repeated[i].time;if(period>2.2)break;if(period<.8)continue;
+      const run=[repeated[i],repeated[j]];let last=j;
+      while(true){let best=-1,bestQuality=-Infinity;
+        for(let k=last+1;k<repeated.length;k++){const gap=repeated[k].time-repeated[last].time;if(gap>period*1.2)break;if(gap<period*.8)continue;
+          const quality=repeated[k].score-Math.abs(gap-period)/period;if(quality>bestQuality){best=k;bestQuality=quality;}}
+        if(best<0)break;run.push(repeated[best]);last=best;
+      }
+      if(run.length>=5&&run.filter(e=>e.score>=.65).length/run.length>=.7&&run.slice(1).filter((e,k)=>e.kind===run[k].kind).length>=2)runs.push(run);
+    }
+    const chosen=[];
+    for(const run of runs.sort((a,b)=>b.length-a.length||b.reduce((s,e)=>s+e.score,0)-a.reduce((s,e)=>s+e.score,0))){if(chosen.every(r=>run.at(-1).time<r[0].time-.6||run[0].time>r.at(-1).time+.6))chosen.push(run);}
+    for(const run of chosen){
+      const start=run[0].time-.6,end=run.at(-1).time+.6;
+      if(run.length<stationary.filter(e=>e.time>=start&&e.time<=end).length)continue;
+      for(let i=stationary.length-1;i>=0;i--)if(stationary[i].time>=start&&stationary[i].time<=end)stationary.splice(i,1);
+      stationary.push(...run);
+    }
+
     // Preserve competing local peaks until cadence can disambiguate them.
     // Greedy amplitude pruning at 0.6 s can erase a real repetition when a
     // neighboring pulse shifts slightly after resampling.
@@ -148,7 +173,7 @@ export function migrateModel(saved){
  if(!saved)return {version:VERSION,revision:0,settings:{...DEFAULTS}};
  if(!validModelTemplates(saved)||!validSettings(saved.settings)||!Number.isInteger(saved.revision)||saved.revision<0)throw Error('Saved model is invalid');
  if(saved.version===VERSION)return saved;
- if(['suburi-1.1.0','suburi-1.1.1','suburi-1.2.0'].includes(saved.version))return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Multiple labeled ranges supported. Existing settings preserved; save a label to recalibrate.'};
+ if(['suburi-1.1.0','suburi-1.1.1','suburi-1.2.0','suburi-1.3.0'].includes(saved.version))return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Repeated-direction sequences supported. Existing settings and templates preserved; save a label to reanalyze a practice.'};
  if(saved.version!=='suburi-1.0.0')throw Error('Saved model version is not supported');
  return {version:VERSION,revision:saved.revision+1,settings:{...DEFAULTS},updatedAt:new Date().toISOString(),
    previousModel:saved,migration:'Updated stationary sequence detector and automatic type recognition. Previous model and original session reports preserved.'};
