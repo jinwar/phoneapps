@@ -1,8 +1,10 @@
+import defaultHayasuburiTemplate from './hayasuburi-template.mjs?v=1.4.0';
+import {validModelTemplates} from './template-validation.mjs?v=1.5.0';
 import {labelsFor,overlaps,validLabels} from './labels.mjs?v=1.3.0';
 let editingLabel=-1;
 import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.3.0';
-import {drawCalibration} from './calibration-chart.mjs?v=1.4.0';
-import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.3.0';
+import {drawCalibration} from './calibration-chart.mjs?v=1.5.0';
+import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.5.0';
 import {openDatabase,readAll,save} from './storage.mjs?v=1.3.0';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
 import {download,shareFile,shareFailure} from './export.mjs?v=1.1.6';
@@ -105,7 +107,7 @@ async function refreshCalibration(s){
  const request=++plotRequest;plotData=null;plotSession=null;$('calibration-plots').hidden=true;
  const effect=s.calibration?.comparison;
  $('calibration-effect').textContent=effect?`Latest calibration — labeled ${effect.range[0]}–${effect.range[1]} s: ${effect.beforeRange??'—'} → ${effect.afterRange??'—'} ${TYPES[effect.type]} (actual ${effect.actual}).\nWhole practice: forward/backward ${effect.beforeStationary} → ${effect.afterStationary}; hayasuburi ${effect.beforeJumping} → ${effect.afterJumping}. Counts, report, history and cadence chart now use the recalculated results.`:'';
- try{const data=await workerCall('prepare',{samples:s.samples,templates});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data.segments,s,data.trial);}
+ try{const data=await workerCall('prepare',{samples:s.samples,templates,model:s.model});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data.segments,s,data.trial);}
  catch(e){if(request===plotRequest)$('threshold-summary').textContent=`Plot unavailable: ${e.message}`;}
 }
 function labelForm(index=-1){
@@ -138,7 +140,7 @@ function motion(event){
  selected.samples.push([t,a.x,a.y,a.z,...[g?.x,g?.y,g?.z,r?.alpha,r?.beta,r?.gamma].map(optional)]);lastSample=now;unsaved=true;
  if(selected.samples.length>=MAX_SAMPLES)finish('Reached 36,000 samples (about 10 minutes). Start a new session after saving.');
 }
-async function updateDetection(s){const detections=await workerCall('detect',{samples:s.samples,templates,settings:s.model.settings});s.detections=detections;return detections;}
+async function updateDetection(s){const detections=await workerCall('detect',{samples:s.samples,templates,model:s.model,settings:s.model.settings});s.detections=detections;return detections;}
 async function finish(message='Practice finished. Review your report or enter a calibration label.'){
  if(!running)return;running=false;busy=true;selected.duration=(performance.now()-started)/1000;selected.endedAt=new Date().toISOString();selected.stopReason=message;
  window.removeEventListener('devicemotion',motion);wakeLock?.release().catch(()=>{});wakeLock=null;controls();$('status').textContent='Finalizing practice…';
@@ -168,23 +170,23 @@ $('label-form').onsubmit=async event=>{
  const subset=selected.samples.filter(r=>r[0]>=from&&r[0]<=to);if(subset.length<120){$('calibration-status').textContent='Select at least two seconds of valid sensor data.';return;}
  busy=true;controls();$('calibration-status').textContent='Comparing settings against saved labeled sessions…';
  try{
- const rangeDetection=await workerCall('detect',{samples:subset,templates,settings:selected.model.settings});
+ const rangeDetection=await workerCall('detect',{samples:subset,templates,model:selected.model,settings:selected.model.settings});
  const labels=labelsFor(selected).slice();if(editingLabel>=0)(selected.labelHistory??=[]).push(structuredClone(labels[editingLabel]));
  const active={type,count,range:[from,to],notes:$('notes').value.trim(),labeledAt:new Date().toISOString(),predictionAlgorithmVersion:VERSION,predictedBefore:rangeDetection[type]?.length??null};
  if(editingLabel<0){editingLabel=labels.length;labels.push(active);}else labels[editingLabel]=active;
  selected.labels=labels;delete selected.label;
  // Label is durable even if fitting later fails.
  await persist(selected);
- const fit=await workerCall('calibrate',{sessions,templates,settings:model.settings,type});
- if(fit.changed){model={previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>labelsFor(s).length).map(s=>s.id)};}
+ const fit=await workerCall('calibrate',{sessions,templates,model,settings:model.settings,type});
+ if(fit.changed){model={...model,...fit.learnedTemplates,previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>labelsFor(s).length).map(s=>s.id)};}
  if(selected.calibration)(selected.calibrationHistory??=[]).push(structuredClone(selected.calibration));
  const beforeSettings=structuredClone(selected.model.settings),before=structuredClone(selected.detections);
- const after=await workerCall('detect',{samples:selected.samples,templates,settings:model.settings});
- const afterRange=await workerCall('detect',{samples:subset,templates,settings:model.settings});
+ const after=await workerCall('detect',{samples:selected.samples,templates,model,settings:model.settings});
+ const afterRange=await workerCall('detect',{samples:subset,templates,model,settings:model.settings});
  selected.originalAnalysis??={model:structuredClone(selected.model),detections:before,type:selected.type};
  selected.calibration={...fit,settings:structuredClone(fit.settings),modelRevision:model.revision,beforeSettings,
  comparison:{type,range:[from,to],actual:count,beforeRange:active.predictedBefore,afterRange:afterRange[type]?.length??null,beforeStationary:before.stationary.length,afterStationary:after.stationary.length,beforeJumping:before.jumping.length,afterJumping:after.jumping.length}};
- for(const label of selected.labels){const d=await workerCall('detect',{samples:selected.samples.filter(r=>r[0]>=label.range[0]&&r[0]<=label.range[1]),templates,settings:model.settings});label.predictedAfter=d[label.type]?.length??null;label.predictionAlgorithmVersion=VERSION;}
+ for(const label of selected.labels){const d=await workerCall('detect',{samples:selected.samples.filter(r=>r[0]>=label.range[0]&&r[0]<=label.range[1]),templates,model,settings:model.settings});label.predictedAfter=d[label.type]?.length??null;label.predictionAlgorithmVersion=VERSION;}
  selected.detections=after;selected.model=structuredClone(model);selected.recalculatedAt=new Date().toISOString();
  if(['stationary','jumping'].includes(selected.type))selected.type='auto';
  await persist(selected,model);$('calibration-status').textContent=fit.message;history();render();renderLabels();refreshCalibration(selected);
@@ -198,7 +200,7 @@ function exportFile(){
  sampleColumns:['elapsed_s','linear_x','linear_y','linear_z','including_gravity_x','including_gravity_y','including_gravity_z','rotation_alpha','rotation_beta','rotation_gamma'],
  notes:'Null means unavailable. Actual labels apply only to each labels[].range. Estimates are body-motion candidates, not verified sword strikes. Model changes are fitted on saved calibration sessions.',
  practiceSummaries:mergeSummaries(summaries,sessions).filter(s=>$('export-scope').value!=='selected'||s.id===selected?.id),
- model:structuredClone(model),stationaryTemplates:templates,sessions:list.map(s=>{const {label,...record}=s;return {...record,labels:labelsFor(s),statistics:statistics(s)};})};
+ model:structuredClone(model),stationaryTemplates:model.stationaryTemplates||templates,baseStationaryTemplates:templates,baseHayasuburiTemplate:defaultHayasuburiTemplate,sessions:list.map(s=>{const {label,...record}=s;return {...record,labels:labelsFor(s),statistics:statistics(s)};})};
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});
 }
 $('download').onclick=()=>{download(exportFile());$('export-status').textContent='Download requested. Check your downloads or save dialog.';};
@@ -217,11 +219,11 @@ setInterval(async()=>{
 function validSession(s){
  const events=d=>d&&['stationary','jumping'].every(k=>Array.isArray(d[k])&&d[k].every(e=>e&&Number.isFinite(e.time)&&e.time>=0));
 
- return s&&typeof s.id==='string'&&Number.isFinite(Date.parse(s.startedAt))&&s.type in TYPES&&Array.isArray(s.samples)&&s.samples.length<=MAX_SAMPLES&&s.samples.every(r=>Array.isArray(r)&&r.length>=4&&r.slice(0,4).every(Number.isFinite))&&s.model&&validSettings(s.model.settings)&&Number.isFinite(s.duration)&&s.duration>=0&&events(s.detections)&&validLabels(s);
+ return s&&typeof s.id==='string'&&Number.isFinite(Date.parse(s.startedAt))&&s.type in TYPES&&Array.isArray(s.samples)&&s.samples.length<=MAX_SAMPLES&&s.samples.every(r=>Array.isArray(r)&&r.length>=4&&r.slice(0,4).every(Number.isFinite))&&s.model&&validSettings(s.model.settings)&&validModelTemplates(s.model)&&Number.isFinite(s.duration)&&s.duration>=0&&events(s.detections)&&validLabels(s);
 }
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
- worker=new Worker(new URL('./worker.mjs?v=1.4.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
+ worker=new Worker(new URL('./worker.mjs?v=1.5.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
  try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||!validSummaries(data.summaries))throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;summaries=data.summaries;model=nextModel;const retained=await save(db,null,model);sessions=retained.sessions;summaries=retained.summaries;}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';

@@ -26,8 +26,8 @@ export function drawCalibration(segments,session,trial){
   plot('hayasuburi-template-chart',[{color:'#8fc7ff',parts:trial.segments.map(s=>s.times.map((time,i)=>[time,s.scores[i]]))}],[-1,1],[{value:trial.threshold,color:'#8fc7ff'}],trial.events);
   const current=session.detections?.jumping||[];
   const comparisons=labelsFor(session).filter(l=>l.type==='jumping').map(l=>`${l.range[0]}–${l.range[1]} s: template ${trial.events.filter(e=>e.time>=l.range[0]&&e.time<=l.range[1]).length}, current ${current.filter(e=>e.time>=l.range[0]&&e.time<=l.range[1]).length}, actual ${l.count}.`);
-  document.getElementById('hayasuburi-template-summary').textContent=`Whole practice: template ${trial.events.length} vs current ${current.length} hayasuburi. ${comparisons.join(' ')} Trial similarity threshold: ${trial.threshold}.`;
+  document.getElementById('hayasuburi-template-summary').textContent=`Whole practice: template ${trial.events.length} vs current ${current.length} hayasuburi. ${comparisons.join(' ')} Trial similarity threshold: ${trial.threshold}. Template: ${session.model.hayasuburiTemplate?'personalized':'original'}.`;
  }
  const change=(key)=>previous&&previous[key]!==settings[key]?`${previous[key]} → ${settings[key]}`:`${settings[key]}`;
- document.getElementById('threshold-summary').textContent=`Forward/backward similarity: strong ${change('strong')}, weak ${change('weak')}. Hayasuburi acceleration: peak ${change('jumpHeight')}, strong anchor ${change('jumpAnchor')} m/s². Timing scales: forward/backward ${change('stationaryScale')}, hayasuburi ${change('jumpScale')}. Threshold crossings also need a repeating sequence.`;
+ document.getElementById('threshold-summary').textContent=`Forward/backward template: ${session.model.stationaryTemplates?'personalized':'original'}. Similarity: strong ${change('strong')}, weak ${change('weak')}. Hayasuburi acceleration: peak ${change('jumpHeight')}, strong anchor ${change('jumpAnchor')} m/s². Timing scales: forward/backward ${change('stationaryScale')}, hayasuburi ${change('jumpScale')}. Threshold crossings also need a repeating sequence.`;
 }

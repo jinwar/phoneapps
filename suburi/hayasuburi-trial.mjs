@@ -1,10 +1,10 @@
-import {preprocess,normalizeWindow} from './detector.mjs?v=1.3.0';
+import {preprocess,normalizeWindow} from './detector.mjs?v=1.5.0';
 import template from './hayasuburi-template.mjs?v=1.4.0';
 export const TRIAL_VERSION='hayasuburi-template-0.1';
 export const TRIAL_THRESHOLD=.5;
 // Independent template-only trial. No current detector events are used to count.
-export function templateTrial(samples){
- const flat=template.flat(),events=[],segments=[];
+export function templateTrial(samples,personalized=template){
+ const flat=personalized.flat(),events=[],segments=[];
  for(const rows of preprocess(samples)){
   const scores=[],times=[],energy=[];
   for(let i=24;i<rows.length-24;i++){

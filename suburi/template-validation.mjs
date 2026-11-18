@@ -1,0 +1,2 @@
+export function validTemplate(t,length){return Array.isArray(t)&&t.length===length&&t.every(r=>Array.isArray(r)&&r.length===3&&r.every(Number.isFinite))&&Math.abs(t.flat().reduce((s,v)=>s+v*v,0)-1)<.01;}
+export function validModelTemplates(m){return (!('stationaryTemplates'in m)||(Array.isArray(m.stationaryTemplates)&&m.stationaryTemplates.length===2&&m.stationaryTemplates.every(t=>validTemplate(t,61))))&&(!('hayasuburiTemplate'in m)||validTemplate(m.hayasuburiTemplate,49));}

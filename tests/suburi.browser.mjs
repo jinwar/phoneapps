@@ -45,7 +45,7 @@ try{
   assert.match(await page.textContent('#report'),/Peak interval cadence/);
   const event=page.waitForEvent('download');await page.click('#download');const file=await event;
   const payload=JSON.parse(await readFile(await file.path(),'utf8'));
-  assert.equal(payload.schema,'phoneapps.suburi.dataset');assert.equal(payload.sessions.length,2);
+  assert.equal(payload.model.hayasuburiTemplate.length,49);assert.equal(payload.sessions[0].calibration.templateLearning.changed,true);assert.equal(payload.sessions[1].model.hayasuburiTemplate.length,49);assert.equal(payload.schema,'phoneapps.suburi.dataset');assert.equal(payload.sessions.length,2);
   assert.equal(payload.sessions[0].labels[0].count,10);assert.equal(payload.sessions[0].model.revision,1);assert.equal(payload.sessions[0].originalAnalysis.model.revision,0);assert.equal(payload.sessions[1].model.revision,1);
   assert.equal(payload.sessions[0].statistics.count,10);assert.equal(payload.sessions[0].originalAnalysis.detections.jumping.length,0);assert.equal(payload.sessions[0].calibration.comparison.afterRange,10);assert.equal(payload.sessions[0].samples.length,492);assert.equal(payload.sessions[0].samples[0].length,10);
   assert.equal(payload.sessions[0].samples[0][4],null);assert.equal(payload.sessions[1].statistics.count,10);

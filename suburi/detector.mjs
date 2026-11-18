@@ -1,7 +1,8 @@
+import {validModelTemplates} from './template-validation.mjs?v=1.5.0';
 import {labelsFor} from './labels.mjs?v=1.3.0';
 // Original pocket-motion detector. Templates calibrated from six user-labeled
 // stationary candidates; exact event timing has not been independently verified.
-export const VERSION = 'suburi-1.2.0';
+export const VERSION = 'suburi-1.3.0';
 export const DEFAULTS = Object.freeze({ strong: .65, weak: .45, stationaryScale: 1.2, jumpHeight: 6, jumpAnchor: 14, jumpScale: 1 });
 const norm = a => Math.sqrt(a.reduce((s,v)=>s+v*v,0));
 export function validSettings(s) {
@@ -145,9 +146,9 @@ export function calibrate(sessions,templates,current,type) {
 
 export function migrateModel(saved){
  if(!saved)return {version:VERSION,revision:0,settings:{...DEFAULTS}};
- if(!validSettings(saved.settings)||!Number.isInteger(saved.revision)||saved.revision<0)throw Error('Saved model is invalid');
+ if(!validModelTemplates(saved)||!validSettings(saved.settings)||!Number.isInteger(saved.revision)||saved.revision<0)throw Error('Saved model is invalid');
  if(saved.version===VERSION)return saved;
- if(['suburi-1.1.0','suburi-1.1.1'].includes(saved.version))return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Multiple labeled ranges supported. Existing settings preserved; save a label to recalibrate.'};
+ if(['suburi-1.1.0','suburi-1.1.1','suburi-1.2.0'].includes(saved.version))return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Multiple labeled ranges supported. Existing settings preserved; save a label to recalibrate.'};
  if(saved.version!=='suburi-1.0.0')throw Error('Saved model version is not supported');
  return {version:VERSION,revision:saved.revision+1,settings:{...DEFAULTS},updatedAt:new Date().toISOString(),
    previousModel:saved,migration:'Updated stationary sequence detector and automatic type recognition. Previous model and original session reports preserved.'};
