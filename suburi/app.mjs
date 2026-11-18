@@ -1,9 +1,11 @@
+import {drawCalibration} from './calibration-chart.mjs?v=1.1.5';
 import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.1';
 import {openDatabase,readAll,save} from './storage.mjs';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
 import {loadGoogle,download,upload,shareFile,shareFailure} from './export.mjs?v=1.1.2';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000,MAX_SESSIONS=30;
+let plotData=null,plotSession=null,plotRequest=0;
 let db,templates,model={version:VERSION,revision:0,settings:{...DEFAULTS}},sessions=[],selected=null,running=false,busy=false,ready=false;
 let started=0,lastSample=0,worker,sequence=0,wakeLock=null,storageHealthy=true,unsaved=false,livePending=false,lastCheckpoint=0;
 const pending=new Map();
@@ -88,10 +90,18 @@ function report(s){
  const rate=v=>v===null?'—':`${v.toFixed(1)} / min`;
  const fields=[['Estimated swings',supported?st.count:'Record only'],['Forward/backward suburi',st.stationaryCount],['Hayasuburi',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
  if(s.label){fields.push(['Actual count (labeled range)',s.label.count],['Estimated in labeled range',s.label.predictedBefore??'No detector']);if(s.label.predictedBefore!==null)fields.push(['Count error before calibration',`${s.label.predictedBefore-s.label.count>=0?'+':''}${s.label.predictedBefore-s.label.count}`]);}
+ if(s.calibration?.comparison?.afterRange!=null){const c=s.calibration.comparison;fields.push(['Estimated after calibration (labeled range)',c.afterRange],['Count error after calibration',c.afterRange-c.actual]);}
  for(const [label,value]of fields){const box=document.createElement('div'),title=document.createElement('span'),strong=document.createElement('strong');title.textContent=label;strong.textContent=value;box.append(title,strong);$('report').append(box);}
- $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. Reports retain the settings used during recording.`;
+ $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. ${s.recalculatedAt?'Report recalculated after calibration; original recording analysis is preserved in the export.':'Report uses the settings from recording.'}`;
 }
-function choose(s){selected=s;$('label-type').value=s.label?.type||(s.type==='auto'?((s.detections?.jumping?.length||0)>(s.detections?.stationary?.length||0)?'jumping':'stationary'):s.type);$('actual').value=s.label?.count??'';$('range-start').value=s.label?.range[0]??0;$('range-end').value=s.label?.range[1]??(s.samples.at(-1)?.[0]||s.duration).toFixed(2);$('notes').value=s.label?.notes||'';history();controls();render();$('calibration-status').textContent=s.calibration?.message||(s.label?'Label saved. You can correct it and recalibrate.':'Enter the actual count and type for this practice to calibrate.');}
+async function refreshCalibration(s){
+ const request=++plotRequest;plotData=null;plotSession=null;$('calibration-plots').hidden=true;
+ const effect=s.calibration?.comparison;
+ $('calibration-effect').textContent=effect?`Latest calibration — labeled ${effect.range[0]}–${effect.range[1]} s: ${effect.beforeRange??'—'} → ${effect.afterRange??'—'} ${TYPES[effect.type]} (actual ${effect.actual}).\nWhole practice: forward/backward ${effect.beforeStationary} → ${effect.afterStationary}; hayasuburi ${effect.beforeJumping} → ${effect.afterJumping}. Counts, report, history and cadence chart now use the recalculated results.`:'';
+ try{const data=await workerCall('prepare',{samples:s.samples,templates});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data,s);}
+ catch(e){if(request===plotRequest)$('threshold-summary').textContent=`Plot unavailable: ${e.message}`;}
+}
+function choose(s){selected=s;refreshCalibration(s);$('label-type').value=s.label?.type||(s.type==='auto'?((s.detections?.jumping?.length||0)>(s.detections?.stationary?.length||0)?'jumping':'stationary'):s.type);$('actual').value=s.label?.count??'';$('range-start').value=s.label?.range[0]??0;$('range-end').value=s.label?.range[1]??(s.samples.at(-1)?.[0]||s.duration).toFixed(2);$('notes').value=s.label?.notes||'';history();controls();render();$('calibration-status').textContent=s.calibration?.message||(s.label?'Label saved. You can correct it and recalibrate.':'Enter the actual count and type for this practice to calibrate.');}
 async function acquireWake(){try{const lock=await navigator.wakeLock?.request('screen');if(running)wakeLock=lock;else await lock?.release();}catch{}}
 function motion(event){
  if(!running)return;const a=event.acceleration;if(!a||![a.x,a.y,a.z].every(Number.isFinite))return;
@@ -117,7 +127,7 @@ $('start').onclick=async()=>{
  try{
  if(typeof DeviceMotionEvent.requestPermission==='function'&&await DeviceMotionEvent.requestPermission()!=='granted')throw Error('Motion permission denied. Allow motion access in browser settings.');
  if(document.hidden)throw Error('Return to this page before starting.');
- selected={id:crypto.randomUUID(),startedAt:new Date().toISOString(),type:'auto',duration:0,samples:[],detections:{stationary:[],jumping:[]},model:structuredClone(model),label:null};sessions.push(selected);started=performance.now();lastSample=started;lastCheckpoint=started;running=true;recorded=true;
+ selected={id:crypto.randomUUID(),startedAt:new Date().toISOString(),type:'auto',duration:0,samples:[],detections:{stationary:[],jumping:[]},model:structuredClone(model),label:null};sessions.push(selected);started=performance.now();lastSample=started;lastCheckpoint=started;running=true;recorded=true;plotRequest++;$('calibration-plots').hidden=true;$('calibration-effect').textContent='';
  window.addEventListener('devicemotion',motion);acquireWake();choose(selected);$('status').textContent='Recording. Put the phone in the calibrated pocket and find your rhythm.';$('calibration-status').textContent='Finish, then enter the actual count and type to calibrate.';await persist(selected);
  }catch(e){$('status').textContent=e.message;}finally{if(!recorded||running)busy=false;controls();}
 };
@@ -139,8 +149,15 @@ $('label-form').onsubmit=async event=>{
  const fit=await workerCall('calibrate',{sessions,templates,settings:model.settings,type});
  if(fit.changed){model={previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>s.label).map(s=>s.id)};}
  if(selected.calibration)(selected.calibrationHistory??=[]).push(structuredClone(selected.calibration));
- selected.calibration={...fit,settings:structuredClone(fit.settings),modelRevision:model.revision};
- await persist(selected,model);$('calibration-status').textContent=fit.message;history();render();
+ const beforeSettings=structuredClone(selected.model.settings),before=structuredClone(selected.detections);
+ const after=await workerCall('detect',{samples:selected.samples,templates,settings:model.settings});
+ const afterRange=await workerCall('detect',{samples:subset,templates,settings:model.settings});
+ selected.originalAnalysis??={model:structuredClone(selected.model),detections:before,type:selected.type};
+ selected.calibration={...fit,settings:structuredClone(fit.settings),modelRevision:model.revision,beforeSettings,
+ comparison:{type,range:[from,to],actual:count,beforeRange:selected.label.predictedBefore,afterRange:afterRange[type]?.length??null,beforeStationary:before.stationary.length,afterStationary:after.stationary.length,beforeJumping:before.jumping.length,afterJumping:after.jumping.length}};
+ selected.detections=after;selected.model=structuredClone(model);selected.recalculatedAt=new Date().toISOString();
+ if(['stationary','jumping'].includes(selected.type))selected.type='auto';
+ await persist(selected,model);$('calibration-status').textContent=fit.message;history();render();refreshCalibration(selected);
  }catch(e){$('calibration-status').textContent=`Could not adjust settings: ${e.message}. Export the labeled recording for analysis.`;}
  finally{busy=false;controls();}
 };
@@ -167,7 +184,7 @@ $('drive').onclick=async()=>{
 document.addEventListener('visibilitychange',()=>{if(document.hidden)finish('Stopped because the page was hidden. Your practice is preserved.');});
 window.addEventListener('pagehide',()=>{if(running){selected.duration=(performance.now()-started)/1000;persist(selected);}});
 window.addEventListener('beforeunload',e=>{if(running||unsaved){e.preventDefault();e.returnValue='';}});
-window.addEventListener('resize',render);
+window.addEventListener('resize',()=>{render();if(plotData&&plotSession&&!running)drawCalibration(plotData,plotSession);});
 setInterval(()=>{if(running&&performance.now()-lastSample>5000)finish('No valid linear acceleration for five seconds. Check motion permission and device support.');render();},250);
 setInterval(async()=>{
  if(!running||livePending)return;const s=selected;livePending=true;
@@ -182,7 +199,7 @@ function validSession(s){
 }
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
- worker=new Worker(new URL('./worker.mjs?v=1.1.1',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
+ worker=new Worker(new URL('./worker.mjs?v=1.1.5',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
  try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||data.sessions.length>MAX_SESSIONS)throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;model=nextModel;if(data.model&&data.model.version!==VERSION){await save(db,null,model);$('storage-status').textContent='Detector updated. Your saved practices, labels and previous settings are preserved.';}}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';
