@@ -69,6 +69,19 @@ try{
   await page.locator('#saved-labels li').first().getByText('Remove',{exact:true}).click();await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);assert.equal(await page.locator('#saved-labels li').count(),1);assert.match(await page.textContent('#saved-labels'),/Hayasuburi/);
   await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.locator('#saved-labels li').count(),1);await context.close();
  });
+ await test('actual labels override incorrect predictions in practice, lifetime, chart and exported counts',async()=>{
+  const {context,page}=await setup();await page.click('#start');await samples(page);await finish(page);
+  assert.equal(await page.textContent('#count'),'10');
+  await page.selectOption('#label-type','stationary');await page.fill('#actual','40');await page.click('#calibrate');await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);
+  assert.equal(await page.textContent('#count'),'40');assert.equal(await page.textContent('#stationary-count'),'40');assert.equal(await page.textContent('#jumping-count'),'0');
+  assert.equal(await page.textContent('#lifetime-stationary'),'40');assert.equal(await page.textContent('#lifetime-jumping'),'0');assert.match(await page.textContent('#history-chart-summary'),/40 forward\/backward suburi and 0 hayasuburi/);
+  assert.match(await page.textContent('#report'),/Detector estimate \(whole practice\)10/);assert.match(await page.textContent('#count-label'),/corrections/);
+  const pending=page.waitForEvent('download');await page.click('#download');const file=await pending;const data=JSON.parse(await readFile(await file.path(),'utf8'));
+  assert.equal(data.sessions[0].statistics.count,40);assert.equal(data.sessions[0].statistics.detectedCount,10);assert.equal(data.sessions[0].detections.jumping.length,10);assert.equal(data.practiceSummaries[0].stationary,40);
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.textContent('#count'),'40');assert.equal(await page.textContent('#lifetime-stationary'),'40');
+  await page.locator('#saved-labels').getByText('Remove',{exact:true}).click();await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);
+  assert.equal(await page.textContent('#count'),'10');assert.equal(await page.textContent('#lifetime-stationary'),'0');assert.equal(await page.textContent('#lifetime-jumping'),'10');await context.close();
+ });
  await test('history retains lifetime counts, ten rows and calibrated recordings plus five recent raw practices',async()=>{
   const {context,page}=await setup();
   await page.evaluate(async()=>{
@@ -81,12 +94,12 @@ try{
   await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);
   assert.equal(await page.locator('#practice-history .practice-row').count(),10);
   assert.equal(await page.locator('#history option').count(),7);
-  assert.equal(await page.textContent('#lifetime-stationary'),'78');assert.equal(await page.textContent('#lifetime-jumping'),'24');
+  assert.equal(await page.textContent('#lifetime-stationary'),'78');assert.equal(await page.textContent('#lifetime-jumping'),'20');
   assert.match(await page.textContent('#history-range'),/7 days/);
   assert.match(await page.textContent('#history-chart-summary'),/63 forward\/backward suburi and 14 hayasuburi/);
   await page.click('#history-zoom-out');assert.match(await page.textContent('#history-range'),/14 days/);
   await page.click('#history-prev');assert.match(await page.textContent('#history-chart-summary'),/Shown: 0/);
-  await page.click('#history-all');assert.match(await page.textContent('#history-chart-summary'),/78 forward\/backward suburi and 24 hayasuburi/);
+  await page.click('#history-all');assert.match(await page.textContent('#history-chart-summary'),/78 forward\/backward suburi and 20 hayasuburi/);
   await page.click('#history-week');assert.match(await page.textContent('#history-range'),/7 days/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.locator('[aria-labelledby="practice-history-title"]').screenshot({path:'/tmp/suburi-history-retention.png'});
@@ -94,9 +107,9 @@ try{
   assert.equal(data.practiceSummaries.length,12);assert.equal(data.sessions.length,7);
   assert.deepEqual(data.sessions.filter(s=>s.labels.length).map(s=>s.id).sort(),['seed-0','seed-1']);
   assert.deepEqual(data.sessions.filter(s=>!s.labels.length).map(s=>Number(s.id.slice(5))).sort((a,b)=>a-b),[7,8,9,10,11]);
-  // Updating an existing summary replaces its count instead of adding it twice.
+  // Updated detections cannot override the user count in an already labeled range.
   await page.evaluate(async()=>{const {openDatabase,readAll,save}=await import('/suburi/storage.mjs?v=1.2.0');const db=await openDatabase();const data=await readAll(db);const s=data.sessions.find(s=>s.id==='seed-0');s.detections.stationary.push({time:3});await save(db,s,null);db.close();});
-  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.textContent('#lifetime-stationary'),'79');assert.equal(await page.locator('#history option').count(),7);
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.textContent('#lifetime-stationary'),'78');assert.equal(await page.locator('#history option').count(),7);
   await context.close();
  });
  await test('failed retention transaction keeps original raw recordings and summaries',async()=>{

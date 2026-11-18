@@ -2,11 +2,11 @@ import defaultHayasuburiTemplate from './hayasuburi-template.mjs?v=1.4.0';
 import {validModelTemplates} from './template-validation.mjs?v=1.5.0';
 import {labelsFor,overlaps,validLabels} from './labels.mjs?v=1.3.0';
 let editingLabel=-1;
-import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.3.0';
+import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.6.0';
 import {drawCalibration} from './calibration-chart.mjs?v=1.5.0';
 import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.5.0';
-import {openDatabase,readAll,save} from './storage.mjs?v=1.3.0';
-import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
+import {openDatabase,readAll,save} from './storage.mjs?v=1.6.0';
+import {cadence,statistics,sessionEvents,practiceCounts} from './stats.mjs?v=1.1.1';
 import {download,shareFile,shareFailure} from './export.mjs?v=1.1.6';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000;
@@ -46,7 +46,7 @@ function history(){
    const duration=document.createElement('div'),durationLabel=document.createElement('span'),durationValue=document.createElement('strong');
    durationLabel.textContent='Duration';durationValue.textContent=fmt(s.duration);duration.append(durationLabel,durationValue);
    const count=document.createElement('div'),countLabel=document.createElement('span'),countValue=document.createElement('strong');
-   countLabel.textContent='Suburi';countValue.textContent=['auto','stationary','jumping'].includes(s.type)?(s.stationary+s.jumping).toLocaleString():'—';count.append(countLabel,countValue);
+   countLabel.textContent='Suburi';countValue.textContent=(s.count??(s.stationary+s.jumping)).toLocaleString();count.append(countLabel,countValue);
    row.append(when,duration,count);
    if(!s.endedAt){const note=document.createElement('small');note.textContent='Interrupted / recovered';row.append(note);}
    list.append(row);
@@ -60,10 +60,10 @@ async function persist(session,updatedModel=null){
 }
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 function render(){
- const s=selected,events=s?sessionEvents(s):[],supported=s&&['auto','stationary','jumping'].includes(s.type);
+ const s=selected,events=s?sessionEvents(s):[],counts=s?practiceCounts(s):{count:0,stationaryCount:0,jumpingCount:0},corrected=s&&labelsFor(s).length,supported=s&&(['auto','stationary','jumping'].includes(s.type)||corrected);
  const duration=running?(performance.now()-started)/1000:(s?.duration||0);
- $('count').textContent=s&&!supported?'—':events.length;$('count-label').textContent=s&&!supported?'data collection only':'estimated swings';
- $('stationary-count').textContent=events.filter(e=>e.type==='stationary').length;$('jumping-count').textContent=events.filter(e=>e.type==='jumping').length;
+ $('count').textContent=s&&!supported?'—':counts.count;$('count-label').textContent=s&&!supported?'data collection only':corrected?'swings · includes your corrections':'estimated swings';
+ $('stationary-count').textContent=counts.stationaryCount;$('jumping-count').textContent=counts.jumpingCount;
  const last=events.at(-1);$('activity').textContent=running?(last&&duration-last.time<=4?`Detected: ${TYPES[last.type]}`:'Listening for a repeating swing pattern…'):'Forward/backward suburi and hayasuburi are detected automatically.';
  $('duration').textContent=fmt(duration);$('samples').textContent=(s?.samples.length||0).toLocaleString();
  const rates=cadence(events),recent=rates.slice(-3);const fresh=recent.length&&duration-recent.at(-1).time<=4;
@@ -96,17 +96,18 @@ function draw(points,events,duration){
  $('chart-summary').textContent=points.length?`${events.length} detected swings. Latest confirmed interval: ${points.at(-1).gap.toFixed(2)} seconds (${points.at(-1).rate.toFixed(0)} swings/min). ${running?'Provisional live estimate.':''}`:'The curve appears after two confirmed swings. Short or unrecognized sequences may not be counted.';
 }
 function report(s){
- const st=statistics(s),supported=['auto','stationary','jumping'].includes(s.type);$('report-type').textContent=TYPES[s.type];$('report').replaceChildren();
+ const st=statistics(s),corrected=labelsFor(s).length>0,supported=['auto','stationary','jumping'].includes(s.type)||corrected;$('report-type').textContent=TYPES[s.type];$('report').replaceChildren();
  const rate=v=>v===null?'—':`${v.toFixed(1)} / min`;
- const fields=[['Estimated swings',supported?st.count:'Record only'],['Forward/backward suburi',st.stationaryCount],['Hayasuburi',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
+ const fields=[[corrected?'Corrected swings':'Estimated swings',supported?st.count:'Record only'],['Forward/backward suburi',st.stationaryCount],['Hayasuburi',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
+ if(corrected)fields.push(['Detector estimate (whole practice)',st.detectedCount]);if(st.forwardCount)fields.push(['Other forward-moving swings',st.forwardCount]);
  for(const l of labelsFor(s)){fields.push([`${TYPES[l.type]} actual (${l.range[0]}–${l.range[1]} s)`,l.count]);if(l.predictedAfter!=null)fields.push(['Estimated after calibration in this range',l.predictedAfter]);}
  for(const [label,value]of fields){const box=document.createElement('div'),title=document.createElement('span'),strong=document.createElement('strong');title.textContent=label;strong.textContent=value;box.append(title,strong);$('report').append(box);}
- $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. ${s.recalculatedAt?'Report recalculated after calibration; original recording analysis is preserved in the export.':'Report uses the settings from recording.'}`;
+ $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. User counts replace estimates inside labeled ranges; unlabeled motion remains estimated. Cadence remains based on detected event timing, not corrected totals. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. ${s.recalculatedAt?'Report recalculated after calibration; original recording analysis is preserved in the export.':'Report uses the settings from recording.'}`;
 }
 async function refreshCalibration(s){
  const request=++plotRequest;plotData=null;plotSession=null;$('calibration-plots').hidden=true;
  const effect=s.calibration?.comparison;
- $('calibration-effect').textContent=effect?`Latest calibration — labeled ${effect.range[0]}–${effect.range[1]} s: ${effect.beforeRange??'—'} → ${effect.afterRange??'—'} ${TYPES[effect.type]} (actual ${effect.actual}).\nWhole practice: forward/backward ${effect.beforeStationary} → ${effect.afterStationary}; hayasuburi ${effect.beforeJumping} → ${effect.afterJumping}. Counts, report, history and cadence chart now use the recalculated results.`:'';
+ $('calibration-effect').textContent=effect?`Latest calibration — labeled ${effect.range[0]}–${effect.range[1]} s: ${effect.beforeRange??'—'} → ${effect.afterRange??'—'} ${TYPES[effect.type]} (actual ${effect.actual}).\nWhole practice: forward/backward ${effect.beforeStationary} → ${effect.afterStationary}; hayasuburi ${effect.beforeJumping} → ${effect.afterJumping}. Practice totals use your labels plus detections outside labeled ranges. The cadence chart still uses detected event times.`:'';
  try{const data=await workerCall('prepare',{samples:s.samples,templates,model:s.model});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data.segments,s,data.trial);}
  catch(e){if(request===plotRequest)$('threshold-summary').textContent=`Plot unavailable: ${e.message}`;}
 }
@@ -125,7 +126,7 @@ function renderLabels(){
  if(running||busy)return;busy=true;controls();const old=labelsFor(selected);(selected.labelHistory??=[]).push({action:'remove',label:structuredClone(old[i]),at:new Date().toISOString()});selected.labels=old.filter((_,j)=>j!==i);delete selected.label;
  if(selected.calibration?.comparison)delete selected.calibration.comparison;
  await persist(selected);if(!sessions.some(s=>s.id===selected.id))selected=sessions[0];
- busy=false;if(selected){choose(selected);$('calibration-status').textContent='Label removed from future calibration. Existing model settings and counts are unchanged until you save a label and recalibrate.';}controls();
+ busy=false;if(selected){choose(selected);$('calibration-status').textContent='Label removed from future calibration. Corrected totals now reflect the remaining labels. Existing model settings are unchanged until you save a label and recalibrate.';}controls();
  };
  row.append(text,edit,remove);list.append(row);});
 }
@@ -176,7 +177,7 @@ $('label-form').onsubmit=async event=>{
  if(editingLabel<0){editingLabel=labels.length;labels.push(active);}else labels[editingLabel]=active;
  selected.labels=labels;delete selected.label;
  // Label is durable even if fitting later fails.
- await persist(selected);
+ await persist(selected);history();render();
  const fit=await workerCall('calibrate',{sessions,templates,model,settings:model.settings,type});
  if(fit.changed){model={...model,...fit.learnedTemplates,previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>labelsFor(s).length).map(s=>s.id)};}
  if(selected.calibration)(selected.calibrationHistory??=[]).push(structuredClone(selected.calibration));
@@ -198,7 +199,7 @@ function exportFile(){
  const payload={schema:'phoneapps.suburi.dataset',schemaVersion:2,algorithmVersion:VERSION,exportedAt:new Date().toISOString(),
  units:{time:'seconds since start, monotonic browser receipt time',acceleration:'m/s²',rotation:'degrees/second'},
  sampleColumns:['elapsed_s','linear_x','linear_y','linear_z','including_gravity_x','including_gravity_y','including_gravity_z','rotation_alpha','rotation_beta','rotation_gamma'],
- notes:'Null means unavailable. Actual labels apply only to each labels[].range. Estimates are body-motion candidates, not verified sword strikes. Model changes are fitted on saved calibration sessions.',
+ notes:'Null means unavailable. Statistics count uses labels plus detections outside labeled ranges; detectedCount preserves the detector estimate. Actual labels apply only to each labels[].range. Estimates are body-motion candidates, not verified sword strikes. Model changes are fitted on saved calibration sessions.',
  practiceSummaries:mergeSummaries(summaries,sessions).filter(s=>$('export-scope').value!=='selected'||s.id===selected?.id),
  model:structuredClone(model),stationaryTemplates:model.stationaryTemplates||templates,baseStationaryTemplates:templates,baseHayasuburiTemplate:defaultHayasuburiTemplate,sessions:list.map(s=>{const {label,...record}=s;return {...record,labels:labelsFor(s),statistics:statistics(s)};})};
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});

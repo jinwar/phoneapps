@@ -94,3 +94,14 @@ test('multiple labels train like independent ranges and legacy labels are read o
  const records=Array.from({length:8},(_,i)=>({id:String(i),startedAt:new Date(2026,0,i+1).toISOString(),labels:i===0?[a,b]:[]}));
  assert.equal(retainPractices(records).length,6);assert.ok(retainPractices(records).some(s=>s.id==='0'));
 });
+
+test('user counts replace both detector types in labeled ranges without fabricating cadence events',async()=>{
+ const {practiceCounts,sessionEvents}=await import('../suburi/stats.mjs');
+ const session={type:'auto',duration:20,samples:[],detections:{stationary:[{time:1},{time:5},{time:18}],jumping:[{time:2},{time:7},{time:10},{time:19}]},labels:[{type:'stationary',count:40,range:[0,5]},{type:'jumping',count:100,range:[5,15]}]};
+ const before=JSON.stringify(session.detections),counts=practiceCounts(session);
+ assert.equal(counts.count,142);assert.equal(counts.stationaryCount,41);assert.equal(counts.jumpingCount,101);assert.equal(counts.detectedCount,7);
+ assert.equal(statistics(session).sessionRate,426);assert.equal(JSON.stringify(session.detections),before);assert.equal(sessionEvents(session).length,7);
+ session.labels=[{type:'other',count:0,range:[0,15]}];assert.equal(practiceCounts(session).count,2);
+ session.labels=[{type:'forward',count:8,range:[0,15]}];assert.equal(practiceCounts(session).count,10);
+ delete session.labels;session.label={type:'stationary',count:40,range:[0,20]};assert.equal(practiceCounts(session).count,40);
+});

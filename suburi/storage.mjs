@@ -1,4 +1,4 @@
-import {retainPractices,mergeSummaries,validSummaries} from './history.mjs?v=1.3.0';
+import {retainPractices,mergeSummaries,validSummaries} from './history.mjs?v=1.6.0';
 const DB='suburi-practice-v1';
 export function openDatabase(){return new Promise((resolve,reject)=>{const request=indexedDB.open(DB,1);request.onupgradeneeded=()=>{request.result.createObjectStore('sessions',{keyPath:'id'});request.result.createObjectStore('settings');};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);request.onblocked=()=>reject(Error('Close other Suburi tabs to update local storage.'));});}
 export function readAll(db){return new Promise((resolve,reject)=>{const tx=db.transaction(['sessions','settings'],'readonly');const s=tx.objectStore('sessions').getAll(),m=tx.objectStore('settings').get('model'),h=tx.objectStore('settings').get('practiceSummaries');tx.oncomplete=()=>resolve({sessions:s.result,model:m.result,summaries:h.result||[]});tx.onerror=()=>reject(tx.error);});}
