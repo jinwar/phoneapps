@@ -1,10 +1,13 @@
+import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.2.0';
 import {drawCalibration} from './calibration-chart.mjs?v=1.1.5';
 import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.1';
-import {openDatabase,readAll,save} from './storage.mjs';
+import {openDatabase,readAll,save} from './storage.mjs?v=1.2.0';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
 import {download,shareFile,shareFailure} from './export.mjs?v=1.1.6';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
-const MAX_SAMPLES=36000,MAX_SESSIONS=30;
+const MAX_SAMPLES=36000;
+const updateHistoryChart=createHistoryChart();
+let summaries=[];
 let plotData=null,plotSession=null,plotRequest=0;
 let db,templates,model={version:VERSION,revision:0,settings:{...DEFAULTS}},sessions=[],selected=null,running=false,busy=false,ready=false;
 let started=0,lastSample=0,worker,sequence=0,wakeLock=null,storageHealthy=true,unsaved=false,livePending=false,lastCheckpoint=0;
@@ -25,7 +28,9 @@ function history(){
  for(const s of [...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))){const o=new Option(`${new Date(s.startedAt).toLocaleString()} · ${TYPES[s.type]}${s.label?' · labeled':''}${s.endedAt?'':' · interrupted'}`,s.id);$('history').append(o);}
  if(selected)$('history').value=selected.id;
  const list=$('practice-history');list.replaceChildren();
- const past=sessions.filter(s=>!(running&&s.id===selected?.id)).sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
+ const all=mergeSummaries(summaries,sessions).filter(s=>!(running&&s.id===selected?.id));
+ updateHistoryChart(all);
+ const past=all.sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).slice(0,10);
  if(!past.length){const empty=document.createElement('li');empty.className='hint';empty.textContent='Your completed practices will appear here.';list.append(empty);}
  for(const s of past){
    const row=document.createElement('li');row.className='practice-row';
@@ -36,7 +41,7 @@ function history(){
    const duration=document.createElement('div'),durationLabel=document.createElement('span'),durationValue=document.createElement('strong');
    durationLabel.textContent='Duration';durationValue.textContent=fmt(s.duration);duration.append(durationLabel,durationValue);
    const count=document.createElement('div'),countLabel=document.createElement('span'),countValue=document.createElement('strong');
-   countLabel.textContent='Suburi';countValue.textContent=['auto','stationary','jumping'].includes(s.type)?sessionEvents(s).length.toLocaleString():'—';count.append(countLabel,countValue);
+   countLabel.textContent='Suburi';countValue.textContent=['auto','stationary','jumping'].includes(s.type)?(s.stationary+s.jumping).toLocaleString():'—';count.append(countLabel,countValue);
    row.append(when,duration,count);
    if(!s.endedAt){const note=document.createElement('small');note.textContent='Interrupted / recovered';row.append(note);}
    list.append(row);
@@ -45,7 +50,7 @@ function history(){
 async function persist(session,updatedModel=null){
  unsaved=true;
  if(!storageHealthy||!db){$('storage-status').textContent='Local saving unavailable. Export data before closing this page.';return false;}
- try{await save(db,session,updatedModel);unsaved=false;$('storage-status').textContent='Saved on this browser. Export a backup for safekeeping.';return true;}
+ try{const result=await save(db,session,updatedModel);sessions=result.sessions.map(s=>s.id===selected?.id?selected:s);summaries=result.summaries;unsaved=false;$('storage-status').textContent='Saved on this browser. Export a backup for safekeeping.';return true;}
  catch{$('storage-status').textContent='Could not save on this phone. Data remains in memory; export before closing.';return false;}
 }
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
@@ -121,7 +126,6 @@ async function finish(message='Practice finished. Review your report or enter a 
 }
 $('start').onclick=async()=>{
  if(running||busy||!ready)return;
- if(sessions.length>=MAX_SESSIONS){$('status').textContent='This browser has 30 saved practices. Export your data, then clear this site’s storage to begin a new collection.';return;}
  if(!window.isSecureContext||!window.DeviceMotionEvent){$('status').textContent='Motion recording needs HTTPS and a supported phone browser.';return;}
  busy=true;let recorded=false;controls();
  try{
@@ -167,6 +171,7 @@ function exportFile(){
  units:{time:'seconds since start, monotonic browser receipt time',acceleration:'m/s²',rotation:'degrees/second'},
  sampleColumns:['elapsed_s','linear_x','linear_y','linear_z','including_gravity_x','including_gravity_y','including_gravity_z','rotation_alpha','rotation_beta','rotation_gamma'],
  notes:'Null means unavailable. Actual labels apply only to label.range. Estimates are body-motion candidates, not verified sword strikes. Model changes are fitted on saved calibration sessions.',
+ practiceSummaries:mergeSummaries(summaries,sessions).filter(s=>$('export-scope').value!=='selected'||s.id===selected?.id),
  model:structuredClone(model),stationaryTemplates:templates,sessions:list.map(s=>({...s,statistics:statistics(s)}))};
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});
 }
@@ -191,7 +196,7 @@ function validSession(s){
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
  worker=new Worker(new URL('./worker.mjs?v=1.1.5',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
- try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||data.sessions.length>MAX_SESSIONS)throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;model=nextModel;if(data.model&&data.model.version!==VERSION){await save(db,null,model);$('storage-status').textContent='Detector updated. Your saved practices, labels and previous settings are preserved.';}}
+ try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||!validSummaries(data.summaries))throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;summaries=data.summaries;model=nextModel;const retained=await save(db,null,model);sessions=retained.sessions;summaries=retained.summaries;}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';
  }catch(e){$('status').textContent=`Could not initialize: ${e.message}. Reload while online.`;}

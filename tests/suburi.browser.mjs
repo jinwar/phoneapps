@@ -54,6 +54,50 @@ try{
   await page.screenshot({path:'/tmp/suburi-report.png',fullPage:true});
   assert.deepEqual(errors,[]);await context.close();
  });
+ await test('history retains lifetime counts, ten rows and calibrated recordings plus five recent raw practices',async()=>{
+  const {context,page}=await setup();
+  await page.evaluate(async()=>{
+   const {DEFAULTS,VERSION}=await import('/suburi/detector.mjs');
+   const db=await new Promise(r=>{const q=indexedDB.open('suburi-practice-v1',1);q.onsuccess=()=>r(q.result);});
+   const tx=db.transaction(['sessions'],'readwrite');
+   for(let i=0;i<12;i++){const date=new Date();date.setDate(date.getDate()-11+i);date.setHours(12,0,0,0);tx.objectStore('sessions').put({id:`seed-${i}`,startedAt:date.toISOString(),endedAt:date.toISOString(),type:'auto',duration:10,samples:[[0,0,0,0],[10,0,0,0]],model:{version:VERSION,revision:0,settings:{...DEFAULTS}},detections:{stationary:Array.from({length:i+1},(_,time)=>({time})),jumping:[{time:1},{time:2}]},label:i<2?{type:'stationary',count:i+1,range:[0,10]}:null});}
+   await new Promise(r=>tx.oncomplete=r);db.close();
+  });
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);
+  assert.equal(await page.locator('#practice-history .practice-row').count(),10);
+  assert.equal(await page.locator('#history option').count(),7);
+  assert.equal(await page.textContent('#lifetime-stationary'),'78');assert.equal(await page.textContent('#lifetime-jumping'),'24');
+  assert.match(await page.textContent('#history-range'),/7 days/);
+  assert.match(await page.textContent('#history-chart-summary'),/63 forward\/backward suburi and 14 hayasuburi/);
+  await page.click('#history-zoom-out');assert.match(await page.textContent('#history-range'),/14 days/);
+  await page.click('#history-prev');assert.match(await page.textContent('#history-chart-summary'),/Shown: 0/);
+  await page.click('#history-all');assert.match(await page.textContent('#history-chart-summary'),/78 forward\/backward suburi and 24 hayasuburi/);
+  await page.click('#history-week');assert.match(await page.textContent('#history-range'),/7 days/);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.locator('[aria-labelledby="practice-history-title"]').screenshot({path:'/tmp/suburi-history-retention.png'});
+  const download=page.waitForEvent('download');await page.click('#download');const file=await download;const data=JSON.parse(await readFile(await file.path(),'utf8'));
+  assert.equal(data.practiceSummaries.length,12);assert.equal(data.sessions.length,7);
+  assert.deepEqual(data.sessions.filter(s=>s.label).map(s=>s.id).sort(),['seed-0','seed-1']);
+  assert.deepEqual(data.sessions.filter(s=>!s.label).map(s=>Number(s.id.slice(5))).sort((a,b)=>a-b),[7,8,9,10,11]);
+  // Updating an existing summary replaces its count instead of adding it twice.
+  await page.evaluate(async()=>{const {openDatabase,readAll,save}=await import('/suburi/storage.mjs?v=1.2.0');const db=await openDatabase();const data=await readAll(db);const s=data.sessions.find(s=>s.id==='seed-0');s.detections.stationary.push({time:3});await save(db,s,null);db.close();});
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.textContent('#lifetime-stationary'),'79');assert.equal(await page.locator('#history option').count(),7);
+  await context.close();
+ });
+ await test('failed retention transaction keeps original raw recordings and summaries',async()=>{
+  const {context,page}=await setup();
+  const result=await page.evaluate(async()=>{
+   const {openDatabase,readAll,save}=await import('/suburi/storage.mjs?v=1.2.0');const db=await openDatabase();
+   const tx=db.transaction('sessions','readwrite');for(let i=0;i<7;i++)tx.objectStore('sessions').put({id:`abort-${i}`,startedAt:new Date(2026,0,i+1).toISOString(),duration:10,type:'auto',detections:{stationary:[{time:1}],jumping:[]}});
+   await new Promise(r=>tx.oncomplete=r);
+   const original=IDBObjectStore.prototype.delete;let rejected=false;
+   // Abort once so the handler can finish without issuing requests after abort.
+   IDBObjectStore.prototype.delete=function(key){IDBObjectStore.prototype.delete=original;const request=original.call(this,key);request.onsuccess=()=>this.transaction.abort();return request;};
+   try{await save(db,null,null);}catch{rejected=true;}finally{IDBObjectStore.prototype.delete=original;}
+   const data=await readAll(db);db.close();return {rejected,count:data.sessions.length,summaries:data.summaries.length};
+  });
+  assert.deepEqual(result,{rejected:true,count:7,summaries:0});await context.close();
+ });
  await test('permission denial and sensor timeout preserve usable controls',async()=>{
   const {context,page}=await setup('denied');await page.click('#start');assert.match(await page.textContent('#status'),/permission denied/i);assert.equal(await page.locator('#stop').isDisabled(),true);await context.close();
   const next=await setup();await next.page.click('#start');await next.page.evaluate(()=>{window.motionTime+=6000;});
