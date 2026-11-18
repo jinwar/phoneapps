@@ -73,17 +73,16 @@ try{
   await page.evaluate(()=>{IDBDatabase.prototype.transaction=()=>{throw Error('Quota exhausted');};});
   await page.click('#calibrate');await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);assert.match(await page.textContent('#storage-status'),/Could not save/);assert.equal(await page.locator('#download').isEnabled(),true);await context.close();
  });
- await test('text sharing avoids JSON-only attachments; permission denial leaves download usable',async()=>{
+ await test('email calibration downloads complete data and prepares the recipient without claiming delivery',async()=>{
   const {context,page}=await setup();await page.click('#start');await samples(page);await finish(page);
-  await page.evaluate(()=>{
-    Object.defineProperty(navigator,'canShare',{value:({files})=>files[0].type==='text/plain',configurable:true});
-    Object.defineProperty(navigator,'share',{value:async({files})=>{window.shared={name:files[0].name,type:files[0].type,data:JSON.parse(await files[0].text())};},configurable:true});
-  });
-  await page.click('#share');await page.waitForFunction(()=>window.shared);
-  const shared=await page.evaluate(()=>window.shared);assert.match(shared.name,/\.json\.txt$/);assert.equal(shared.data.schema,'phoneapps.suburi.dataset');assert.equal(shared.data.sessions[0].type,'auto');
-  await page.evaluate(()=>{Object.defineProperty(navigator,'share',{value:async()=>{throw new DOMException('Permission denied','NotAllowedError');},configurable:true});});
-  await page.click('#share');await page.waitForFunction(()=>document.getElementById('export-status').textContent.includes('denied file sharing'));
-  assert.equal(await page.locator('#download').isEnabled(),true);await context.close();
+  const pending=page.waitForEvent('download');await page.click('#email');const file=await pending;
+  const data=JSON.parse(await readFile(await file.path(),'utf8'));
+  assert.equal(data.schema,'phoneapps.suburi.dataset');assert.ok(data.sessions[0].samples.length);
+  const href=await page.getAttribute('#email-link','href');assert.ok(href.startsWith('mailto:jinwar@gmail.com?'));
+  assert.ok(decodeURIComponent(href).includes(file.suggestedFilename()));
+  assert.match(await page.textContent('#export-status'),/attach it/);
+  assert.match(await page.textContent('#export-status'),/nothing has been sent/);
+  assert.equal(await page.locator('#share').count(),0);await context.close();
  });
  await test('v1 upgrade preserves old practices and labels while new practices are automatic',async()=>{
   const {context,page}=await setup();await page.click('#start');await samples(page);await finish(page);

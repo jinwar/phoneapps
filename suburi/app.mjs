@@ -1,7 +1,7 @@
-import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.0';
+import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.1';
 import {openDatabase,readAll,save} from './storage.mjs';
-import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.0';
-import {loadGoogle,download,upload,shareFile,shareFailure} from './export.mjs?v=1.1.0';
+import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
+import {loadGoogle,download,upload,calibrationEmail} from './export.mjs?v=1.1.1';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
 const MAX_SAMPLES=36000,MAX_SESSIONS=30;
 let db,templates,model={version:VERSION,revision:0,settings:{...DEFAULTS}},sessions=[],selected=null,running=false,busy=false,ready=false;
@@ -13,7 +13,7 @@ function controls(){
  $('history').disabled=running||busy;
  $('calibrate').disabled=!selected||running||busy||!selected.samples.length;
  for(const id of ['label-type','actual','range-start','range-end','notes'])$(id).disabled=running||busy||!selected;
- for(const id of ['download','share','drive'])$(id).disabled=running||busy||!sessions.length;
+ for(const id of ['download','email','drive'])$(id).disabled=running||busy||!sessions.length;
  $('badge').textContent=running?'Recording':busy?'Processing':'Ready';
  $('model-info').textContent=`Model ${model.revision} · ${VERSION}`;
 }
@@ -154,11 +154,15 @@ function exportFile(){
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});
 }
 $('download').onclick=()=>{download(exportFile());$('export-status').textContent='Download requested. Check your downloads or save dialog.';};
-$('share').onclick=async()=>{const file=shareFile(exportFile());if(!navigator.canShare?.({files:[file]})){$('export-status').textContent='File sharing is unavailable. Export data, then upload the JSON file in Google Drive.';return;}busy=true;controls();try{await navigator.share({files:[file],title:file.name});$('export-status').textContent='File handed to the selected app. Confirm it saved in Drive.';}catch(e){$('export-status').textContent=shareFailure(e);}finally{busy=false;controls();}};
+$('email').onclick=()=>{
+ const file=exportFile();download(file);
+ $('email-link').href=calibrationEmail(file);$('email-link').hidden=false;
+ $('export-status').textContent=`Download requested: ${file.name}. Save the file, then open the email draft below and attach it. The draft is addressed to jinwar@gmail.com; nothing has been sent yet.`;
+};
 $('client-id').value=window.SUBURI_CONFIG?.googleClientId||'';
 const prepareGoogle=()=>{if($('client-id').value.trim())loadGoogle().catch(()=>{});};$('client-id').onchange=prepareGoogle;prepareGoogle();
 $('drive').onclick=async()=>{
- const client=$('client-id').value.trim();if(!client.endsWith('.apps.googleusercontent.com')){document.querySelector('details').open=true;$('client-id').focus();$('export-status').textContent='Enter a Google OAuth web client ID, or use Share / Drive.';return;}
+ const client=$('client-id').value.trim();if(!client.endsWith('.apps.googleusercontent.com')){document.querySelector('details').open=true;$('client-id').focus();$('export-status').textContent='Enter a Google OAuth web client ID, or export the file and upload it in Drive.';return;}
  busy=true;controls();$('drive-link').hidden=true;
  try{if(!window.google?.accounts?.oauth2){$('export-status').textContent='Loading Google sign-in…';await loadGoogle();$('export-status').textContent='Sign-in is ready. Tap Upload to Google Drive again.';return;}
  $('export-status').textContent='Sign in to upload the export to My Drive…';const url=await upload(exportFile(),client);$('drive-link').href=url;$('drive-link').hidden=false;$('export-status').textContent='Data uploaded to My Drive.';
@@ -182,7 +186,7 @@ function validSession(s){
 }
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
- worker=new Worker(new URL('./worker.mjs?v=1.1.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
+ worker=new Worker(new URL('./worker.mjs?v=1.1.1',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
  try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||data.sessions.length>MAX_SESSIONS)throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;model=nextModel;if(data.model&&data.model.version!==VERSION){await save(db,null,model);$('storage-status').textContent='Detector updated. Your saved practices, labels and previous settings are preserved.';}}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';

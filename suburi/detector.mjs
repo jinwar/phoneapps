@@ -1,6 +1,6 @@
 // Original pocket-motion detector. Templates calibrated from six user-labeled
 // stationary candidates; exact event timing has not been independently verified.
-export const VERSION = 'suburi-1.1.0';
+export const VERSION = 'suburi-1.1.1';
 export const DEFAULTS = Object.freeze({ strong: .65, weak: .45, stationaryScale: 1.2, jumpHeight: 6, jumpAnchor: 14, jumpScale: 1 });
 const norm = a => Math.sqrt(a.reduce((s,v)=>s+v*v,0));
 export function validSettings(s) {
@@ -133,7 +133,7 @@ export function calibrate(sessions,templates,current,type) {
   const loss=settings=>prepared.reduce((sum,p)=>{const detected=detectPrepared(p.data,settings);return sum+Math.abs(detected.stationary.length-p.expected.stationary)+Math.abs(detected.jumping.length-p.expected.jumping);},0);
   const before=loss(current);let best={...current},bestLoss=before;
   const candidates=[];
-  if(type==='stationary')for(const strong of [.65,.7,.75,.8,.85])for(const weak of [.45,.5,.55,.6,.65])for(const scale of [.8,1,1.2,1.4])candidates.push({...current,strong,weak,stationaryScale:scale});
+  if(type==='stationary')for(const strong of [.5,.55,.6,.65,.7,.75,.8,.85])for(const weak of [.35,.4,.45,.5,.55,.6,.65])for(const scale of [.8,1,1.2,1.4])candidates.push({...current,strong,weak,stationaryScale:scale});
   else for(const height of [3,4,5,6,7,8,10,12])for(const anchor of [10,14,18])for(const scale of [.8,1,1.2,1.4])candidates.push({...current,jumpHeight:height,jumpAnchor:anchor,jumpScale:scale});
   // Prefer the existing parameters on ties; do not repeatedly drift to extremes.
   for(const settings of candidates){const error=loss(settings);if(error<bestLoss){best=settings;bestLoss=error;}}
@@ -146,6 +146,7 @@ export function migrateModel(saved){
  if(!saved)return {version:VERSION,revision:0,settings:{...DEFAULTS}};
  if(!validSettings(saved.settings)||!Number.isInteger(saved.revision)||saved.revision<0)throw Error('Saved model is invalid');
  if(saved.version===VERSION)return saved;
+ if(saved.version==='suburi-1.1.0')return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Expanded calibration similarity range. Existing settings preserved; save the practice label again to recalibrate.'};
  if(saved.version!=='suburi-1.0.0')throw Error('Saved model version is not supported');
  return {version:VERSION,revision:saved.revision+1,settings:{...DEFAULTS},updatedAt:new Date().toISOString(),
    previousModel:saved,migration:'Updated stationary sequence detector and automatic type recognition. Previous model and original session reports preserved.'};
