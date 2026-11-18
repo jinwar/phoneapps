@@ -25,7 +25,7 @@ try{
   await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);
   assert.match(await page.textContent('#calibration-status'),/Settings updated/);
   assert.match(await page.textContent('#model-info'),/Model 1/);
-  assert.match(await page.textContent('#report'),/Actual count/);
+  assert.match(await page.textContent('#report'),/actual \(/);
   assert.equal(await page.textContent('#count'),'10');
   assert.match(await page.textContent('#calibration-effect'),/0 → 10/);
   assert.match(await page.textContent('#practice-history'),/10/);
@@ -44,7 +44,7 @@ try{
   const event=page.waitForEvent('download');await page.click('#download');const file=await event;
   const payload=JSON.parse(await readFile(await file.path(),'utf8'));
   assert.equal(payload.schema,'phoneapps.suburi.dataset');assert.equal(payload.sessions.length,2);
-  assert.equal(payload.sessions[0].label.count,10);assert.equal(payload.sessions[0].model.revision,1);assert.equal(payload.sessions[0].originalAnalysis.model.revision,0);assert.equal(payload.sessions[1].model.revision,1);
+  assert.equal(payload.sessions[0].labels[0].count,10);assert.equal(payload.sessions[0].model.revision,1);assert.equal(payload.sessions[0].originalAnalysis.model.revision,0);assert.equal(payload.sessions[1].model.revision,1);
   assert.equal(payload.sessions[0].statistics.count,10);assert.equal(payload.sessions[0].originalAnalysis.detections.jumping.length,0);assert.equal(payload.sessions[0].calibration.comparison.afterRange,10);assert.equal(payload.sessions[0].samples.length,492);assert.equal(payload.sessions[0].samples[0].length,10);
   assert.equal(payload.sessions[0].samples[0][4],null);assert.equal(payload.sessions[1].statistics.count,10);
   await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);
@@ -53,6 +53,19 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.screenshot({path:'/tmp/suburi-report.png',fullPage:true});
   assert.deepEqual(errors,[]);await context.close();
+ });
+ await test('two types in one practice survive editing, overlap rejection, reload, export and removal',async()=>{
+  const {context,page}=await setup();await page.click('#start');await samples(page);await finish(page);
+  await page.selectOption('#label-type','stationary');await page.fill('#actual','0');await page.fill('#range-end','4');await page.click('#calibrate');await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);
+  await page.click('#add-label');await page.selectOption('#label-type','jumping');await page.fill('#actual','5');await page.fill('#range-start','4');await page.fill('#range-end','8');await page.click('#calibrate');await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);
+  assert.equal(await page.locator('#saved-labels li').count(),2);
+  await page.click('#add-label');await page.fill('#actual','1');await page.fill('#range-start','3');await page.fill('#range-end','6');await page.click('#calibrate');assert.match(await page.textContent('#calibration-status'),/overlaps/);assert.equal(await page.locator('#saved-labels li').count(),2);
+  await page.locator('#saved-labels li').first().getByText('Edit',{exact:true}).click();await page.fill('#notes','first segment');await page.click('#calibrate');await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);assert.equal(await page.locator('#saved-labels li').count(),2);
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.locator('#saved-labels li').count(),2);
+  const pending=page.waitForEvent('download');await page.click('#download');const file=await pending;const data=JSON.parse(await readFile(await file.path(),'utf8'));
+  assert.equal(data.schemaVersion,2);assert.deepEqual(data.sessions[0].labels.map(l=>l.type),['stationary','jumping']);assert.equal(data.sessions[0].labels[0].notes,'first segment');assert.ok(data.sessions[0].labels.every(l=>Number.isInteger(l.predictedAfter)));assert.equal(data.sessions[0].calibration.ranges,2);
+  await page.locator('#saved-labels li').first().getByText('Remove',{exact:true}).click();await page.waitForFunction(()=>!document.getElementById('calibrate').disabled);assert.equal(await page.locator('#saved-labels li').count(),1);assert.match(await page.textContent('#saved-labels'),/Hayasuburi/);
+  await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.locator('#saved-labels li').count(),1);await context.close();
  });
  await test('history retains lifetime counts, ten rows and calibrated recordings plus five recent raw practices',async()=>{
   const {context,page}=await setup();
@@ -77,8 +90,8 @@ try{
   await page.locator('[aria-labelledby="practice-history-title"]').screenshot({path:'/tmp/suburi-history-retention.png'});
   const download=page.waitForEvent('download');await page.click('#download');const file=await download;const data=JSON.parse(await readFile(await file.path(),'utf8'));
   assert.equal(data.practiceSummaries.length,12);assert.equal(data.sessions.length,7);
-  assert.deepEqual(data.sessions.filter(s=>s.label).map(s=>s.id).sort(),['seed-0','seed-1']);
-  assert.deepEqual(data.sessions.filter(s=>!s.label).map(s=>Number(s.id.slice(5))).sort((a,b)=>a-b),[7,8,9,10,11]);
+  assert.deepEqual(data.sessions.filter(s=>s.labels.length).map(s=>s.id).sort(),['seed-0','seed-1']);
+  assert.deepEqual(data.sessions.filter(s=>!s.labels.length).map(s=>Number(s.id.slice(5))).sort((a,b)=>a-b),[7,8,9,10,11]);
   // Updating an existing summary replaces its count instead of adding it twice.
   await page.evaluate(async()=>{const {openDatabase,readAll,save}=await import('/suburi/storage.mjs?v=1.2.0');const db=await openDatabase();const data=await readAll(db);const s=data.sessions.find(s=>s.id==='seed-0');s.detections.stationary.push({time:3});await save(db,s,null);db.close();});
   await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);assert.equal(await page.textContent('#lifetime-stationary'),'79');assert.equal(await page.locator('#history option').count(),7);
@@ -140,14 +153,14 @@ try{
     const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('suburi-practice-v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=reject;});
     const tx=db.transaction(['sessions','settings'],'readwrite');
     const store=tx.objectStore('sessions'),req=store.getAll();
-    req.onsuccess=()=>{const s=req.result[0];s.type='jumping';s.model.version='suburi-1.0.0';s.model.revision=3;s.label={type:'jumping',count:10,range:[0,8],predictedBefore:10};store.put(s);tx.objectStore('settings').put(s.model,'model');};
+    req.onsuccess=()=>{const s=req.result[0];delete s.labels;s.type='jumping';s.model.version='suburi-1.0.0';s.model.revision=3;s.label={type:'jumping',count:10,range:[0,8],predictedBefore:10};store.put(s);tx.objectStore('settings').put(s.model,'model');};
     await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=reject;});db.close();
   });
   await page.reload();await page.waitForFunction(()=>!document.getElementById('start').disabled);
   assert.equal(await page.locator('#history option').count(),1);assert.match(await page.textContent('#model-info'),/Model 4/);assert.equal(await page.inputValue('#actual'),'10');
   assert.match(await page.textContent('#report-note'),/revision 3/);assert.equal(await page.locator('#type').count(),0);
   const event=page.waitForEvent('download');await page.click('#download');const file=await event;const data=JSON.parse(await readFile(await file.path(),'utf8'));
-  assert.equal(data.model.previousModel.version,'suburi-1.0.0');assert.equal(data.sessions[0].label.count,10);
+  assert.equal(data.model.previousModel.version,'suburi-1.0.0');assert.equal(data.sessions[0].labels[0].count,10);
   await context.close();
  });
 

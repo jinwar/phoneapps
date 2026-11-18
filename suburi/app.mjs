@@ -1,7 +1,9 @@
-import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.2.0';
-import {drawCalibration} from './calibration-chart.mjs?v=1.1.5';
-import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.1.1';
-import {openDatabase,readAll,save} from './storage.mjs?v=1.2.0';
+import {labelsFor,overlaps,validLabels} from './labels.mjs?v=1.3.0';
+let editingLabel=-1;
+import {createHistoryChart,mergeSummaries,validSummaries} from './history.mjs?v=1.3.0';
+import {drawCalibration} from './calibration-chart.mjs?v=1.3.0';
+import {VERSION,DEFAULTS,validSettings,migrateModel} from './detector.mjs?v=1.3.0';
+import {openDatabase,readAll,save} from './storage.mjs?v=1.3.0';
 import {cadence,statistics,sessionEvents} from './stats.mjs?v=1.1.1';
 import {download,shareFile,shareFailure} from './export.mjs?v=1.1.6';
 const $=id=>document.getElementById(id),TYPES={auto:'Automatic',stationary:'Forward/backward suburi',jumping:'Hayasuburi',forward:'Forward-moving',other:'Walking / other'};
@@ -17,15 +19,16 @@ function controls(){
  $('start').disabled=!ready||running||busy;$('stop').disabled=!running||busy;
  $('history').disabled=running||busy;
  $('calibrate').disabled=!selected||running||busy||!selected.samples.length;
- for(const id of ['label-type','actual','range-start','range-end','notes'])$(id).disabled=running||busy||!selected;
+ for(const id of ['label-type','actual','range-start','range-end','notes','add-label'])$(id).disabled=running||busy||!selected;
  for(const id of ['download','share'])$(id).disabled=running||busy||!sessions.length;
+ document.querySelectorAll('#saved-labels button').forEach(b=>b.disabled=running||busy);
  $('badge').textContent=running?'Recording':busy?'Processing':'Ready';
  $('model-info').textContent=`Model ${model.revision} · ${VERSION}`;
 }
 function history(){
  $('history').replaceChildren();
  if(!sessions.length){const o=new Option('No saved practices','');$('history').append(o);}
- for(const s of [...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))){const o=new Option(`${new Date(s.startedAt).toLocaleString()} · ${TYPES[s.type]}${s.label?' · labeled':''}${s.endedAt?'':' · interrupted'}`,s.id);$('history').append(o);}
+ for(const s of [...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))){const o=new Option(`${new Date(s.startedAt).toLocaleString()} · ${TYPES[s.type]}${labelsFor(s).length?' · labeled':''}${s.endedAt?'':' · interrupted'}`,s.id);$('history').append(o);}
  if(selected)$('history').value=selected.id;
  const list=$('practice-history');list.replaceChildren();
  const all=mergeSummaries(summaries,sessions).filter(s=>!(running&&s.id===selected?.id));
@@ -94,8 +97,7 @@ function report(s){
  const st=statistics(s),supported=['auto','stationary','jumping'].includes(s.type);$('report-type').textContent=TYPES[s.type];$('report').replaceChildren();
  const rate=v=>v===null?'—':`${v.toFixed(1)} / min`;
  const fields=[['Estimated swings',supported?st.count:'Record only'],['Forward/backward suburi',st.stationaryCount],['Hayasuburi',st.jumpingCount],['Session duration',fmt(st.duration)],['Mean interval cadence',rate(st.averageRate)],['Peak interval cadence',rate(st.peakRate)],['Median cadence',rate(st.medianRate)],['Whole-session rate',supported?rate(st.sessionRate):'—'],['Interval variation',st.intervalVariation===null?'—':`${st.intervalVariation.toFixed(1)}%`],['Sensor sample rate',st.sampleRate===null?'—':`${st.sampleRate.toFixed(1)} Hz`]];
- if(s.label){fields.push(['Actual count (labeled range)',s.label.count],['Estimated in labeled range',s.label.predictedBefore??'No detector']);if(s.label.predictedBefore!==null)fields.push(['Count error before calibration',`${s.label.predictedBefore-s.label.count>=0?'+':''}${s.label.predictedBefore-s.label.count}`]);}
- if(s.calibration?.comparison?.afterRange!=null){const c=s.calibration.comparison;fields.push(['Estimated after calibration (labeled range)',c.afterRange],['Count error after calibration',c.afterRange-c.actual]);}
+ for(const l of labelsFor(s)){fields.push([`${TYPES[l.type]} actual (${l.range[0]}–${l.range[1]} s)`,l.count]);if(l.predictedAfter!=null)fields.push(['Estimated after calibration in this range',l.predictedAfter]);}
  for(const [label,value]of fields){const box=document.createElement('div'),title=document.createElement('span'),strong=document.createElement('strong');title.textContent=label;strong.textContent=value;box.append(title,strong);$('report').append(box);}
  $('report-note').textContent=`${s.endedAt?'Completed':'Interrupted / recovered'} session · detector revision ${s.model.revision}. Cadence uses confirmed intervals up to 4 seconds; gaps and type transitions are excluded. Lower interval variation means more even timing, not better technique. Whole-session rate includes preparation and rests. ${s.recalculatedAt?'Report recalculated after calibration; original recording analysis is preserved in the export.':'Report uses the settings from recording.'}`;
 }
@@ -106,7 +108,27 @@ async function refreshCalibration(s){
  try{const data=await workerCall('prepare',{samples:s.samples,templates});if(request!==plotRequest||selected!==s||running)return;plotData=data;plotSession=s;$('calibration-plots').hidden=false;drawCalibration(data,s);}
  catch(e){if(request===plotRequest)$('threshold-summary').textContent=`Plot unavailable: ${e.message}`;}
 }
-function choose(s){selected=s;refreshCalibration(s);$('label-type').value=s.label?.type||(s.type==='auto'?((s.detections?.jumping?.length||0)>(s.detections?.stationary?.length||0)?'jumping':'stationary'):s.type);$('actual').value=s.label?.count??'';$('range-start').value=s.label?.range[0]??0;$('range-end').value=s.label?.range[1]??(s.samples.at(-1)?.[0]||s.duration).toFixed(2);$('notes').value=s.label?.notes||'';history();controls();render();$('calibration-status').textContent=s.calibration?.message||(s.label?'Label saved. You can correct it and recalibrate.':'Enter the actual count and type for this practice to calibrate.');}
+function labelForm(index=-1){
+ editingLabel=index;const l=labelsFor(selected)[index];
+ $('label-type').value=l?.type||'stationary';$('actual').value=l?.count??'';
+ $('range-start').value=l?.range[0]??0;$('range-end').value=l?.range[1]??(selected.samples.at(-1)?.[0]||selected.duration).toFixed(2);$('notes').value=l?.notes||'';
+ $('calibrate').textContent=l?'Update label & adjust detector':'Save label & adjust detector';
+ $('label-editing').textContent=l?`Editing label ${index+1}`:'Adding a new labeled range';
+}
+function renderLabels(){
+ const list=$('saved-labels');list.replaceChildren();
+ labelsFor(selected).forEach((l,i)=>{const row=document.createElement('li'),text=document.createElement('span');text.textContent=`${l.range[0]}–${l.range[1]} s · ${TYPES[l.type]} · actual ${l.count}${l.predictedAfter!=null?` · estimated ${l.predictedAfter}`:''}`;
+ const edit=document.createElement('button');edit.type='button';edit.textContent='Edit';edit.onclick=()=>labelForm(i);
+ const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=async()=>{
+ if(running||busy)return;busy=true;controls();const old=labelsFor(selected);(selected.labelHistory??=[]).push({action:'remove',label:structuredClone(old[i]),at:new Date().toISOString()});selected.labels=old.filter((_,j)=>j!==i);delete selected.label;
+ if(selected.calibration?.comparison)delete selected.calibration.comparison;
+ await persist(selected);if(!sessions.some(s=>s.id===selected.id))selected=sessions[0];
+ busy=false;if(selected){choose(selected);$('calibration-status').textContent='Label removed from future calibration. Existing model settings and counts are unchanged until you save a label and recalibrate.';}controls();
+ };
+ row.append(text,edit,remove);list.append(row);});
+}
+$('add-label').onclick=()=>{if(selected&&!running&&!busy)labelForm();};
+function choose(s){selected=s;labelForm(labelsFor(s).length?0:-1);renderLabels();refreshCalibration(s);history();controls();render();$('calibration-status').textContent=s.calibration?.message||'Add a type, count and time range, then save to calibrate.';}
 async function acquireWake(){try{const lock=await navigator.wakeLock?.request('screen');if(running)wakeLock=lock;else await lock?.release();}catch{}}
 function motion(event){
  if(!running)return;const a=event.acceleration;if(!a||![a.x,a.y,a.z].every(Number.isFinite))return;
@@ -131,7 +153,7 @@ $('start').onclick=async()=>{
  try{
  if(typeof DeviceMotionEvent.requestPermission==='function'&&await DeviceMotionEvent.requestPermission()!=='granted')throw Error('Motion permission denied. Allow motion access in browser settings.');
  if(document.hidden)throw Error('Return to this page before starting.');
- selected={id:crypto.randomUUID(),startedAt:new Date().toISOString(),type:'auto',duration:0,samples:[],detections:{stationary:[],jumping:[]},model:structuredClone(model),label:null};sessions.push(selected);started=performance.now();lastSample=started;lastCheckpoint=started;running=true;recorded=true;plotRequest++;$('calibration-plots').hidden=true;$('calibration-effect').textContent='';
+ selected={id:crypto.randomUUID(),startedAt:new Date().toISOString(),type:'auto',duration:0,samples:[],detections:{stationary:[],jumping:[]},model:structuredClone(model),labels:[]};sessions.push(selected);started=performance.now();lastSample=started;lastCheckpoint=started;running=true;recorded=true;plotRequest++;$('calibration-plots').hidden=true;$('calibration-effect').textContent='';
  window.addEventListener('devicemotion',motion);acquireWake();choose(selected);$('status').textContent='Recording. Put the phone in the calibrated pocket and find your rhythm.';$('calibration-status').textContent='Finish, then enter the actual count and type to calibrate.';await persist(selected);
  }catch(e){$('status').textContent=e.message;}finally{if(!recorded||running)busy=false;controls();}
 };
@@ -142,37 +164,41 @@ $('label-form').onsubmit=async event=>{
  event.preventDefault();if(running||busy||!selected)return;
  const count=Number($('actual').value),from=Number($('range-start').value),to=Number($('range-end').value),type=$('label-type').value;
  if(!Number.isInteger(count)||count<0||count>2000||!Number.isFinite(from)||!Number.isFinite(to)||from<0||to<=from||to>selected.duration+.05||(type==='other'&&count!==0)){ $('calibration-status').textContent='Enter a whole count (0–2000), valid time range inside this session, and zero swings for walking / other.';return;}
+ if(overlaps(labelsFor(selected),[from,to],editingLabel)){$('calibration-status').textContent='This range overlaps another label. Use non-overlapping ranges; adjacent ranges may share an endpoint.';return;}
  const subset=selected.samples.filter(r=>r[0]>=from&&r[0]<=to);if(subset.length<120){$('calibration-status').textContent='Select at least two seconds of valid sensor data.';return;}
  busy=true;controls();$('calibration-status').textContent='Comparing settings against saved labeled sessions…';
  try{
  const rangeDetection=await workerCall('detect',{samples:subset,templates,settings:selected.model.settings});
- if(selected.label)(selected.labelHistory??=[]).push(structuredClone(selected.label));
- selected.label={type,count,range:[from,to],notes:$('notes').value.trim(),labeledAt:new Date().toISOString(),predictionAlgorithmVersion:VERSION,predictedBefore:rangeDetection[type]?.length??null};
+ const labels=labelsFor(selected).slice();if(editingLabel>=0)(selected.labelHistory??=[]).push(structuredClone(labels[editingLabel]));
+ const active={type,count,range:[from,to],notes:$('notes').value.trim(),labeledAt:new Date().toISOString(),predictionAlgorithmVersion:VERSION,predictedBefore:rangeDetection[type]?.length??null};
+ if(editingLabel<0){editingLabel=labels.length;labels.push(active);}else labels[editingLabel]=active;
+ selected.labels=labels;delete selected.label;
  // Label is durable even if fitting later fails.
  await persist(selected);
  const fit=await workerCall('calibrate',{sessions,templates,settings:model.settings,type});
- if(fit.changed){model={previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>s.label).map(s=>s.id)};}
+ if(fit.changed){model={previousModel:model,version:VERSION,revision:model.revision+1,settings:fit.settings,updatedAt:new Date().toISOString(),calibrationSessionIds:sessions.filter(s=>labelsFor(s).length).map(s=>s.id)};}
  if(selected.calibration)(selected.calibrationHistory??=[]).push(structuredClone(selected.calibration));
  const beforeSettings=structuredClone(selected.model.settings),before=structuredClone(selected.detections);
  const after=await workerCall('detect',{samples:selected.samples,templates,settings:model.settings});
  const afterRange=await workerCall('detect',{samples:subset,templates,settings:model.settings});
  selected.originalAnalysis??={model:structuredClone(selected.model),detections:before,type:selected.type};
  selected.calibration={...fit,settings:structuredClone(fit.settings),modelRevision:model.revision,beforeSettings,
- comparison:{type,range:[from,to],actual:count,beforeRange:selected.label.predictedBefore,afterRange:afterRange[type]?.length??null,beforeStationary:before.stationary.length,afterStationary:after.stationary.length,beforeJumping:before.jumping.length,afterJumping:after.jumping.length}};
+ comparison:{type,range:[from,to],actual:count,beforeRange:active.predictedBefore,afterRange:afterRange[type]?.length??null,beforeStationary:before.stationary.length,afterStationary:after.stationary.length,beforeJumping:before.jumping.length,afterJumping:after.jumping.length}};
+ for(const label of selected.labels){const d=await workerCall('detect',{samples:selected.samples.filter(r=>r[0]>=label.range[0]&&r[0]<=label.range[1]),templates,settings:model.settings});label.predictedAfter=d[label.type]?.length??null;label.predictionAlgorithmVersion=VERSION;}
  selected.detections=after;selected.model=structuredClone(model);selected.recalculatedAt=new Date().toISOString();
  if(['stationary','jumping'].includes(selected.type))selected.type='auto';
- await persist(selected,model);$('calibration-status').textContent=fit.message;history();render();refreshCalibration(selected);
+ await persist(selected,model);$('calibration-status').textContent=fit.message;history();render();renderLabels();refreshCalibration(selected);
  }catch(e){$('calibration-status').textContent=`Could not adjust settings: ${e.message}. Export the labeled recording for analysis.`;}
- finally{busy=false;controls();}
+ finally{busy=false;renderLabels();controls();}
 };
 function exportFile(){
- const list=$('export-scope').value==='selected'&&selected?[selected]:sessions;
- const payload={schema:'phoneapps.suburi.dataset',schemaVersion:1,algorithmVersion:VERSION,exportedAt:new Date().toISOString(),
+ const list=$('export-scope').value==='selected'&&selected?[selected]:[...sessions].sort((a,b)=>a.startedAt.localeCompare(b.startedAt));
+ const payload={schema:'phoneapps.suburi.dataset',schemaVersion:2,algorithmVersion:VERSION,exportedAt:new Date().toISOString(),
  units:{time:'seconds since start, monotonic browser receipt time',acceleration:'m/s²',rotation:'degrees/second'},
  sampleColumns:['elapsed_s','linear_x','linear_y','linear_z','including_gravity_x','including_gravity_y','including_gravity_z','rotation_alpha','rotation_beta','rotation_gamma'],
- notes:'Null means unavailable. Actual labels apply only to label.range. Estimates are body-motion candidates, not verified sword strikes. Model changes are fitted on saved calibration sessions.',
+ notes:'Null means unavailable. Actual labels apply only to each labels[].range. Estimates are body-motion candidates, not verified sword strikes. Model changes are fitted on saved calibration sessions.',
  practiceSummaries:mergeSummaries(summaries,sessions).filter(s=>$('export-scope').value!=='selected'||s.id===selected?.id),
- model:structuredClone(model),stationaryTemplates:templates,sessions:list.map(s=>({...s,statistics:statistics(s)}))};
+ model:structuredClone(model),stationaryTemplates:templates,sessions:list.map(s=>{const {label,...record}=s;return {...record,labels:labelsFor(s),statistics:statistics(s)};})};
  return new File([JSON.stringify(payload)],`suburi-data-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,{type:'application/json'});
 }
 $('download').onclick=()=>{download(exportFile());$('export-status').textContent='Download requested. Check your downloads or save dialog.';};
@@ -190,12 +216,12 @@ setInterval(async()=>{
 },1200);
 function validSession(s){
  const events=d=>d&&['stationary','jumping'].every(k=>Array.isArray(d[k])&&d[k].every(e=>e&&Number.isFinite(e.time)&&e.time>=0));
- const label=l=>!l||(l.type in TYPES&&Number.isInteger(l.count)&&l.count>=0&&Array.isArray(l.range)&&l.range.length===2&&l.range.every(Number.isFinite)&&l.range[0]>=0&&l.range[1]>l.range[0]);
- return s&&typeof s.id==='string'&&Number.isFinite(Date.parse(s.startedAt))&&s.type in TYPES&&Array.isArray(s.samples)&&s.samples.length<=MAX_SAMPLES&&s.samples.every(r=>Array.isArray(r)&&r.length>=4&&r.slice(0,4).every(Number.isFinite))&&s.model&&validSettings(s.model.settings)&&Number.isFinite(s.duration)&&s.duration>=0&&events(s.detections)&&label(s.label);
+
+ return s&&typeof s.id==='string'&&Number.isFinite(Date.parse(s.startedAt))&&s.type in TYPES&&Array.isArray(s.samples)&&s.samples.length<=MAX_SAMPLES&&s.samples.every(r=>Array.isArray(r)&&r.length>=4&&r.slice(0,4).every(Number.isFinite))&&s.model&&validSettings(s.model.settings)&&Number.isFinite(s.duration)&&s.duration>=0&&events(s.detections)&&validLabels(s);
 }
 async function init(){
  try{const response=await fetch('./templates.json');if(!response.ok)throw Error('Template file unavailable');templates=await response.json();if(templates.length!==2||!templates.every(t=>t.length===61&&t.every(r=>r.length===3&&r.every(Number.isFinite))))throw Error('Invalid templates');
- worker=new Worker(new URL('./worker.mjs?v=1.1.5',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
+ worker=new Worker(new URL('./worker.mjs?v=1.3.0',import.meta.url),{type:'module'});worker.onmessage=({data})=>{const job=pending.get(data.id);if(job){pending.delete(data.id);data.error?job.reject(Error(data.error)):job.resolve(data.result);}};worker.onerror=()=>{for(const p of pending.values())p.reject(Error('Detector worker failed'));pending.clear();ready=false;controls();};
  try{db=await openDatabase();const data=await readAll(db);if(!data.sessions.every(validSession)||!validSummaries(data.summaries))throw Error('Saved data or model is incompatible');const nextModel=migrateModel(data.model);sessions=data.sessions;summaries=data.summaries;model=nextModel;const retained=await save(db,null,model);sessions=retained.sessions;summaries=retained.summaries;}
  catch(e){storageHealthy=false;$('storage-status').textContent=`Local history unavailable (${e.message}). Existing data will not be overwritten. Export new sessions before closing.`;}
  ready=true;if(sessions.length)choose([...sessions].sort((a,b)=>b.startedAt.localeCompare(a.startedAt))[0]);else history();controls();render();$('status').textContent='Ready. Record a practice, then optionally add the actual count for calibration.';

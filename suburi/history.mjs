@@ -1,6 +1,7 @@
+import {labelsFor} from './labels.mjs?v=1.3.0';
 import {sessionEvents} from './stats.mjs?v=1.1.0';
 export function summarize(s){const events=sessionEvents(s);return {id:s.id,startedAt:s.startedAt,endedAt:s.endedAt||null,duration:s.duration,type:s.type,stationary:events.filter(e=>e.type==='stationary').length,jumping:events.filter(e=>e.type==='jumping').length};}
-export function retainPractices(sessions){const recent=new Set(sessions.filter(s=>!s.label).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)||b.id.localeCompare(a.id)).slice(0,5).map(s=>s.id));return sessions.filter(s=>s.label||recent.has(s.id));}
+export function retainPractices(sessions){const recent=new Set(sessions.filter(s=>!labelsFor(s).length).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)||b.id.localeCompare(a.id)).slice(0,5).map(s=>s.id));return sessions.filter(s=>labelsFor(s).length||recent.has(s.id));}
 export function mergeSummaries(summaries,sessions){const byId=new Map(summaries.map(s=>[s.id,s]));for(const s of sessions)byId.set(s.id,summarize(s));return [...byId.values()];}
 export const validSummaries=items=>Array.isArray(items)&&items.every(s=>s&&typeof s.id==='string'&&Number.isFinite(Date.parse(s.startedAt))&&Number.isFinite(s.duration)&&s.duration>=0&&['stationary','jumping'].every(k=>Number.isInteger(s[k])&&s[k]>=0));
 // Calendar days, using local dates but UTC arithmetic so DST does not skip days.

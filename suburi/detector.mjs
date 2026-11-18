@@ -1,6 +1,7 @@
+import {labelsFor} from './labels.mjs?v=1.3.0';
 // Original pocket-motion detector. Templates calibrated from six user-labeled
 // stationary candidates; exact event timing has not been independently verified.
-export const VERSION = 'suburi-1.1.1';
+export const VERSION = 'suburi-1.2.0';
 export const DEFAULTS = Object.freeze({ strong: .65, weak: .45, stationaryScale: 1.2, jumpHeight: 6, jumpAnchor: 14, jumpScale: 1 });
 const norm = a => Math.sqrt(a.reduce((s,v)=>s+v*v,0));
 export function validSettings(s) {
@@ -126,7 +127,7 @@ export const detect=(samples,templates,settings=DEFAULTS,range=null)=>detectPrep
 // Replays all labeled sessions of the target type plus negative examples.
 export function calibrate(sessions,templates,current,type) {
   if(!['stationary','jumping'].includes(type))return {settings:current,changed:false,message:'Label saved for analysis. This type does not yet have an automatic detector.'};
-  const usable=sessions.filter(s=>s.label && (s.label.type===type||s.label.type==='other'||(s.label.type!==type&&['stationary','jumping'].includes(s.label.type))));
+  const usable=sessions.flatMap(s=>labelsFor(s).filter(l=>['stationary','jumping','other'].includes(l.type)).map(label=>({...s,label})));
   const positive=usable.filter(s=>s.label.type===type);
   if(!positive.length)return {settings:current,changed:false,message:'No labeled sessions for this type.'};
   const prepared=usable.map(s=>({data:prepare(s.samples,templates,s.label.range),expected:{stationary:s.label.type==='stationary'?s.label.count:0,jumping:s.label.type==='jumping'?s.label.count:0}}));
@@ -137,16 +138,16 @@ export function calibrate(sessions,templates,current,type) {
   else for(const height of [3,4,5,6,7,8,10,12])for(const anchor of [10,14,18])for(const scale of [.8,1,1.2,1.4])candidates.push({...current,jumpHeight:height,jumpAnchor:anchor,jumpScale:scale});
   // Prefer the existing parameters on ties; do not repeatedly drift to extremes.
   for(const settings of candidates){const error=loss(settings);if(error<bestLoss){best=settings;bestLoss=error;}}
-  return {settings:best,changed:bestLoss<before,before,after:bestLoss,sessions:usable.length,
-    message:bestLoss<before?`Settings updated: total count error on ${usable.length} saved labeled sessions fell from ${before} to ${bestLoss}. This is calibration, not an independent accuracy test.`:
-    `Label saved. Current settings retained (total count error ${before} across ${usable.length} labeled sessions). More recordings may help; counts are never forced to match labels.`};
+  return {settings:best,changed:bestLoss<before,before,after:bestLoss,sessions:new Set(usable.map(s=>s.id||s)).size,ranges:usable.length,
+    message:bestLoss<before?`Settings updated: total count error on ${usable.length} saved labeled ranges fell from ${before} to ${bestLoss}. This is calibration, not an independent accuracy test.`:
+    `Label saved. Current settings retained (total count error ${before} across ${usable.length} labeled ranges). More recordings may help; counts are never forced to match labels.`};
 }
 
 export function migrateModel(saved){
  if(!saved)return {version:VERSION,revision:0,settings:{...DEFAULTS}};
  if(!validSettings(saved.settings)||!Number.isInteger(saved.revision)||saved.revision<0)throw Error('Saved model is invalid');
  if(saved.version===VERSION)return saved;
- if(saved.version==='suburi-1.1.0')return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Expanded calibration similarity range. Existing settings preserved; save the practice label again to recalibrate.'};
+ if(['suburi-1.1.0','suburi-1.1.1'].includes(saved.version))return {...saved,version:VERSION,revision:saved.revision+1,previousModel:saved,updatedAt:new Date().toISOString(),migration:'Multiple labeled ranges supported. Existing settings preserved; save a label to recalibrate.'};
  if(saved.version!=='suburi-1.0.0')throw Error('Saved model version is not supported');
  return {version:VERSION,revision:saved.revision+1,settings:{...DEFAULTS},updatedAt:new Date().toISOString(),
    previousModel:saved,migration:'Updated stationary sequence detector and automatic type recognition. Previous model and original session reports preserved.'};

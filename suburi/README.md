@@ -12,7 +12,7 @@ The live plot shows **cadence in swings/minute**, not shinai velocity in m/s. A 
 
 The Practice history list above Saved practices shows the newest 10 sessions’ local date/time, duration, and estimated suburi count. Interrupted sessions are marked; the active recording appears after it ends.
 
-Reports contain estimated count, full session duration, mean/median/peak interval cadence, whole-session count per minute, inter-repetition interval coefficient of variation, and sensor sample rate. Lower interval variation means more even timing, not better technique. Actual count, estimate and count error are shown for the labeled range when one exists. After calibration, the selected practice is reanalyzed with the current model. Its count, report, history row and cadence chart update immediately. The original model/detections are retained in `originalAnalysis` in exports. Other saved practices are not silently reanalyzed.
+Reports contain estimated count, full session duration, mean/median/peak interval cadence, whole-session count per minute, inter-repetition interval coefficient of variation, and sensor sample rate. Lower interval variation means more even timing, not better technique. Actual counts and recalculated estimates are shown for each labeled range. After calibration, the selected practice is reanalyzed with the current model. Its count, report, history row and cadence chart update immediately. The original model/detections are retained in `originalAnalysis` in exports. Other saved practices are not silently reanalyzed.
 
 ## Detector
 
@@ -32,7 +32,7 @@ Finish a recording, enter actual activity and count, and optionally trim the tim
 
 Stationary calibration tunes both similarity thresholds and allowed repetition spacing. Jumping calibration tunes pulse height, strong-anchor height, and spacing. This version does not retrain a neural network, infer true event timestamps from total counts, or learn arbitrary new waveform templates. A different phone orientation or swing style may require further algorithm work; keep the data and export it. There is no claim that fitting saved sessions improves unseen data. Validate new settings with a fresh session.
 
-The time-range label and actual count must describe the same part of the recording. Only one activity per calibration recording is supported. Count zero is valid for supported types if testing false positives. Forward labels are preserved for analysis but do not adjust unsupported detectors. Walking labels are used when a stationary or jumping calibration is subsequently run.
+The time-range label and actual count must describe the same part of the recording. Multiple non-overlapping labeled ranges per recording are supported. Count zero is valid for supported types if testing false positives. Forward labels are preserved for analysis but do not adjust unsupported detectors. Walking labels are used when a stationary or jumping calibration is subsequently run.
 
 ## Storage and export
 
@@ -45,7 +45,7 @@ Exports use JSON schema `phoneapps.suburi.dataset`, version 1:
 - each session's UUID, UTC start/end, type, duration, stop reason and original model;
 - `samples`: elapsed seconds, linear X/Y/Z in m/s², inclusive-gravity X/Y/Z in m/s², rotation alpha/beta/gamma in degrees/second;
 - original stationary/jumping detection timestamps and derived statistics;
-- optional label: actual type/count, time range, pocket notes, label time, predicted count before fitting;
+- labels array: actual type/count, time range, pocket notes, label time, estimates before and after fitting;
 - optional calibration summary: settings selected, fit errors, whether changed and new model revision.
 
 Choose all saved sessions or just the selected session. **Share** opens the native share sheet with the complete JSON data attached as a `text/plain` file named `*.json.txt` for phone compatibility. Choose your email app, Drive, or another destination and complete sending or saving there. The app confirms handoff, not delivery. If sharing is denied or unavailable, Export data still downloads the JSON for manual attachment. Direct Google Drive upload is not included; use Share or Export data. Exports do not automatically update the app. No import interface is included; keep exports for analysis/backups.
@@ -99,3 +99,11 @@ Practice history begins with lifetime estimated counts for forward/backward subu
 Full recordings are retained for every practice with a saved calibration label (including unsupported activity labels) and the five newest uncalibrated practices. The former 30-session cap is removed. On loading existing history and on saving, older uncalibrated raw recordings are pruned only in the same successful transaction that preserves their compact summaries. These summaries retain ID, date/time, duration, completion status, type and both estimated counts. The newest ten summaries populate Practice history; only retained full recordings appear in Saved practices for review and calibration. Recalibration replaces a summary's counts by session ID, without double-counting.
 
 All-data exports include `practiceSummaries` plus retained full sessions; selected-practice exports include only that practice and its summary. Lifetime means history available in this browser, not data previously deleted or stored on another device. Clearing site data removes both summaries and recordings; exports remain important. There is no artificial cap on calibrated recordings, but device storage quota still applies.
+
+## Multiple labels per practice
+
+Use **Add another label** to enter an additional activity/count/time range in the same saved practice. For example, label 0–90 s as forward/backward suburi and 90–189 s as hayasuburi. Use **Edit** to correct an existing range, or **Remove** to exclude it from future calibration. Overlapping ranges are rejected; touching endpoints are allowed. Each range must contain at least two seconds of sensor data. Actual counts apply only to that range, not the whole practice.
+
+Calibration evaluates all supported labeled ranges across retained practices, treating each range independently and including the other detected type in its error calculation. Saving a label tunes that type's parameters and recalculates the whole selected practice plus estimates for every labeled range. All labeled regions are shaded on the plots. Removing a label does not undo learned settings; save a remaining label to fit again. Removing the last label makes the recording subject to the latest-five uncalibrated retention rule.
+
+Legacy `label` objects are read as one-element lists. New and edited practices use `labels`; exports use schema version 2 and always emit a `labels` array, including for older practices. Existing settings survive the detector metadata upgrade. Calibration summaries distinguish unique `sessions` from labeled `ranges`. Prior label edits/removals remain in `labelHistory` for analysis.

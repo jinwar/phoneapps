@@ -1,7 +1,8 @@
+import {labelsFor} from './labels.mjs?v=1.3.0';
 // Similarity is dimensionless; keep it separate from acceleration thresholds.
 export function drawCalibration(segments,session){
  const settings=session.model.settings,previous=session.calibration?.beforeSettings;
- const range=session.label?.range;
+ const ranges=labelsFor(session).map(l=>l.range);
  function plot(id,series,limits,thresholds){
   const c=document.getElementById(id),w=c.clientWidth,h=220,dpr=devicePixelRatio||1;
   c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);
@@ -9,7 +10,7 @@ export function drawCalibration(segments,session){
   const x=v=>l+v/end*(r-l),y=v=>b-(v-limits[0])/(limits[1]-limits[0])*(b-t);
   ctx.font='11px system-ui';ctx.fillStyle='#9dafc2';ctx.strokeStyle='#2a3a4c';
   for(let i=0;i<=4;i++){const v=limits[0]+i*(limits[1]-limits[0])/4;ctx.beginPath();ctx.moveTo(l,y(v));ctx.lineTo(r,y(v));ctx.stroke();ctx.fillText(v.toFixed(1),1,y(v)+4);ctx.fillText(`${Math.round(end*i/4)}s`,x(end*i/4)-8,h-8);}
-  if(range){ctx.fillStyle='#ffffff0c';ctx.fillRect(x(range[0]),t,x(range[1])-x(range[0]),b-t);}
+  for(const range of ranges){ctx.fillStyle='#ffffff0c';ctx.fillRect(x(range[0]),t,x(range[1])-x(range[0]),b-t);}
   for(const {parts,color}of series){ctx.strokeStyle=color;ctx.lineWidth=1;for(const points of parts){ctx.beginPath();points.forEach(([time,value],i)=>{if(i)ctx.lineTo(x(time),y(value));else ctx.moveTo(x(time),y(value));});ctx.stroke();}}
   for(const {value,color,old}of thresholds){ctx.strokeStyle=color;ctx.lineWidth=old?1:2;ctx.setLineDash(old?[2,6]:[7,4]);ctx.beginPath();ctx.moveTo(l,y(value));ctx.lineTo(r,y(value));ctx.stroke();}ctx.setLineDash([]);
  }

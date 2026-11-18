@@ -10,3 +10,5 @@
 #acceleration-chart,#similarity-chart{display:block;width:100%;height:220px}#calibration-effect{white-space:pre-line}
 
 .lifetime{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}.lifetime span{display:block;font-size:12px;color:#9dafc2}.lifetime strong{display:block;font-size:28px;margin-top:6px;font-variant-numeric:tabular-nums}.history-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}#history-chart{height:240px}
+
+#saved-labels{list-style:none;padding:0}#saved-labels li{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}#saved-labels li span{flex-basis:100%;font-size:13px}

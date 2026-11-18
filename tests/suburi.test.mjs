@@ -79,3 +79,18 @@ test('jump path retains real rhythmic peaks around a stronger off-cadence distra
  negativeY[Math.round(3.2*60)]=40;
  const result=detectPrepared([{rows,scores,negativeY}]);assert.equal(result.jumping.length,10);assert.equal(result.stationary.length,0);assert.ok(!result.jumping.some(e=>Math.abs(e.time-3.2)<.01));
 });
+
+test('multiple labels train like independent ranges and legacy labels are read only once',async()=>{
+ const {labelsFor,overlaps,validLabels}=await import('../suburi/labels.mjs');
+ const a={type:'stationary',count:0,range:[0,4]},b={type:'jumping',count:0,range:[4,8]};
+ assert.equal(labelsFor({label:a}).length,1);assert.equal(labelsFor({labels:[a,b],label:a}).length,2);
+ assert.equal(overlaps([a,b],[3,5]),true);assert.equal(overlaps([a],[4,8]),false);
+ assert.equal(validLabels({duration:8,labels:[a,b]}),true);assert.equal(validLabels({duration:8,labels:[a,{...b,range:[3,8]}]}),false);
+ const samples=Array.from({length:481},(_,i)=>[i/60,0,0,0]);
+ const multi=calibrate([{id:'mixed',samples,labels:[a,b]}],templates,DEFAULTS,'stationary');
+ const split=calibrate([{samples,label:a},{samples,label:b}],templates,DEFAULTS,'stationary');
+ assert.equal(multi.ranges,2);assert.equal(multi.sessions,1);assert.equal(multi.before,split.before);assert.deepEqual(multi.settings,split.settings);
+ const {retainPractices}=await import('../suburi/history.mjs');
+ const records=Array.from({length:8},(_,i)=>({id:String(i),startedAt:new Date(2026,0,i+1).toISOString(),labels:i===0?[a,b]:[]}));
+ assert.equal(retainPractices(records).length,6);assert.ok(retainPractices(records).some(s=>s.id==='0'));
+});
